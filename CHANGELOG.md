@@ -3,6 +3,7 @@
 ## Release documentation — 2026-10-18
 
 - Prepare concise r40 release highlights in a temporary, Git-ignored notes file.
+- User confirms r40 is released and the temporary notes have been removed.
 
 
 ## r40 — 2026-10-18

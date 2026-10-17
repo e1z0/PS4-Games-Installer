@@ -4,6 +4,7 @@
 
 - [x] Write concise temporary realease_notes.md for the GitHub release page.
 - [x] Ignore the notes in Git and retain the existing r40 package/revision.
+- [x] User published r40 and removed the temporary release notes; verify absence.
 
 
 ## Current implementation: screenshot shortcut in game Actions

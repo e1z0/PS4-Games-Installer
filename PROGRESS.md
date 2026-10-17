@@ -4,9 +4,11 @@
 
 - Created the requested temporary realease_notes.md with consumer release
   highlights, changes/fixes since r34, requirements and upgrade guidance.
-- Added an exact root ignore rule. The notes remain outside version control;
-  only the ignore rule and work records are committed. Application/package
-  inputs and successful revision remain r40.
+- Added an exact root ignore rule; the temporary notes were kept outside version
+  control. The user confirms r40 was released and the notes removed. Verified
+  realease_notes.md is absent; retain the ignore rule for future temporary notes.
+- Publication is user-reported and does not establish additional hardware test
+  results. Application/package inputs and successful revision remain r40.
 
 
 ## r40 screenshot shortcut in game Actions — 2026-10-18
