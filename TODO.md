@@ -8,7 +8,7 @@
 - [x] Finish narration/rendering, inspect captions/screens and validate the movie.
 - [x] Export the video, chapters, captions, commands and capture credits.
 - [x] Add a README video preview with companion notes immediately underneath.
-- [ ] Publish and verify the tutorial links on GitHub.
+- [x] Publish and verify the tutorial links on GitHub.
 - [ ] Replace illustrated GoldHEN/USB steps with newly filmed PS4 footage if a
   capture/control connection becomes available.
 

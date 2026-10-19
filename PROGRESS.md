@@ -5,7 +5,9 @@
 - Added a consumer README video preview, linking the full reviewed MP4 and
   companion notes directly below it. Public assets are in docs/video/media/;
   publication is limited to tutorial documentation/media, leaving unrelated
-  application commits local. Public link verification is pending.
+  application commits local. Anonymous GitHub browser review confirmed the preview
+  renders and the companion links are present. Public movie, ZIP and command URLs
+  return HTTP 200; the downloaded movie matches its original SHA-256.
 - Completed an English Ubuntu/Linux tutorial with narration, captions, chapters
   and copyable consumer commands. Application sources and revision r48 are unchanged.
 - Recorded genuine Bash/Chromium activity for the official Compose example in a
