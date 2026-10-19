@@ -1,5 +1,15 @@
 # Work tracker
 
+## Beginner setup video
+
+- [x] Verify project setup instructions and current public release.
+- [x] Record a separate real Compose setup and browser library verification.
+- [x] Write beginner narration, source labels and matching consumer commands.
+- [x] Finish narration/rendering, inspect captions/screens and validate the movie.
+- [x] Export the video, chapters, captions, commands and capture credits.
+- [ ] Replace illustrated GoldHEN/USB steps with newly filmed PS4 footage if a
+  capture/control connection becomes available.
+
 ## Readable package URL in queue diagnostics
 
 - [x] Reuse the display decoder while preserving the original encoded URL.

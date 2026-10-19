@@ -1,0 +1,57 @@
+PS4 Games Installer — Beginner Setup Movie
+Recording/edit date: 19 October 2026
+Language: English. Computer platform: Ubuntu Linux.
+
+Created for the PS4 Games Installer project by e1z0 / Vintage2000.org.
+https://github.com/e1z0/PS4-Games-Installer
+https://github.com/e1z0/FPKGi-node-server
+
+CAPTURES
+Newly captured here: actual Bash commands, official project/Docker web pages,
+a real isolated FPKGi Node Server Docker Compose setup, its healthy status,
+scanning the project's public installer package, extracted cover, category JSON,
+and browser library. Terminal activity was recorded continuously with Playwright.
+Actual command text, exit codes, screenshots and raw recordings are retained in
+build/setup-video/ for review.
+
+Newly captured desktop application: the actual compiled r48 preview enters
+http://10.1.14.10:13000/games, tests the real demonstration server successfully,
+and saves that URL in a dedicated isolated preview data directory. This is desktop
+software, NOT PS4 video and NOT proof of an installation performed on the console.
+
+Real PS4 application images: existing project Screenshots/ captures dated
+17 October 2026, supplied with the repository. They are credited on screen.
+USB copying and GoldHEN package installation are explained, not newly filmed.
+There was no live PS4 screen/control feed or attached video capture device.
+Do not advertise this movie as entirely new end-to-end physical PS4 footage.
+
+The Docker installation page is shown, but Docker was already installed on the
+recording PC; it was not reinstalled over that PC's existing services.
+The latest public installer download at recording time was r40. Newer desktop
+application UI is r48 and is labeled. Viewers should download the latest public
+PKG and expect version-dependent menu differences.
+
+SPEECH AND TOOLS
+Narration is synthesized locally using Piper TTS 1.8.0, not recorded speech by
+e1z0 or another person. Voice: en_US-ljspeech-medium, trained using the public-domain
+LJ Speech dataset; see its model card and dataset:
+https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/medium/MODEL_CARD
+https://keithito.com/LJ-Speech-Dataset/
+https://github.com/OHF-Voice/piper1-gpl
+
+Capture: Playwright 1.64.0, Chromium headless shell build 1248, xterm.js 5.5.0,
+Xvfb, and the real compiled desktop preview. Editing/export: Pillow 12.2.0,
+FFmpeg/libx264/libass. Typeface: DejaVu Sans. No generated replacement PS4 screens,
+AI-generated game artwork, stock tutorial footage, or background music is used.
+
+CAPTIONS
+The visible captions are burned in for reliable playback. A separate English SRT
+is included for reuse. There is no extra embedded text track that could cause
+players to display the same captions twice.
+The movie includes chapter markers and chapters.txt for navigation.
+
+OFFICIAL SETUP REFERENCES
+https://docs.docker.com/engine/install/ubuntu/
+https://github.com/e1z0/FPKGi-node-server/blob/main/docker-compose.example.yml
+https://github.com/e1z0/PS4-Games-Installer/releases
+https://github.com/GoldHEN/GoldHEN

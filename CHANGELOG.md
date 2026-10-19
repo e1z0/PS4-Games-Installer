@@ -1,5 +1,13 @@
 # Changelog
 
+## Beginner setup video — 2026-10-19
+
+- Create a 15:48 English Ubuntu setup movie with real Compose/browser recordings,
+  desktop settings captures, narration, captions, chapters and companion commands.
+- Clearly label existing PS4 photographs and desktop previews; USB/GoldHEN
+  installation is explained without claiming a newly filmed console installation.
+- Validate full media decoding and chapter/caption timing. App revision stays r48.
+
 ## r48 — Readable queue package URLs — 2026-10-19
 
 - Decode percent-escaped package URLs in Package progress and diagnostics, with

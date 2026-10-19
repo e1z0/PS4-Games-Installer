@@ -1,5 +1,31 @@
 # Implementation progress
 
+## Beginner setup movie — 2026-10-19
+
+- Completed an English Ubuntu/Linux tutorial with narration, captions, chapters
+  and copyable consumer commands. Application sources and revision r48 are unchanged.
+- Recorded genuine Bash/Chromium activity for the official Compose example in a
+  separate project on ports 18080/13000. All recorded commands returned success;
+  the container became healthy, scanned the public r40 installer PKG, extracted
+  its icon and served working category JSON and the browser library.
+- New terminal/browser recordings are distinct from existing real PS4 project
+  screenshots and labeled r48 desktop UI close-ups. No live console capture feed
+  is available; USB copying and GoldHEN installation are explained, not filmed.
+  The official Docker install page is shown without reinstalling Docker on the
+  recording host. GitHub's current public package is r40.
+- Recorded the actual r48 desktop preview entering, testing and saving the live
+  demonstration URL, using an isolated data mount. Its connection test found the
+  scanned package. This is desktop evidence, not physical PS4 confirmation.
+- Exported dist/tutorial/PS4-Games-Installer-Setup.mp4: 15:48.182, 1920x1080
+  H.264/AAC stereo, 29 chapters, 94 burned-in caption cues and 29,833,765 bytes.
+  SHA-256: 3cd75cfe133613e48a23f3ba089da3624da8fe5d9ef7676a713bfd0dd82f621f.
+  The companion ZIP includes commands, transcript, captions, credits and provenance.
+- Full video/audio decode, stream/chapter/caption checks and capture hashes passed.
+  Reviewed chapter frames and corrected terminal overlays that obscured commands.
+  Source scripts and provenance rules are in docs/video; large media/tool artifacts
+  remain ignored. Stopped only the temporary Compose project and preview capture,
+  retaining demonstration files. No package deployment or external publication.
+
 ## Readable queue package URLs — 2026-10-19
 
 - Package progress and diagnostics used the raw saved URL, while Game Details

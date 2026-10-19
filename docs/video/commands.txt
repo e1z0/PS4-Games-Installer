@@ -1,0 +1,159 @@
+PS4 GAMES INSTALLER — BEGINNER SETUP COMPANION
+Recording edition: Ubuntu Linux, English, 19 October 2026.
+The computer and PS4 must be able to reach one another on the same trusted LAN.
+GoldHEN must already work. This does not install a jailbreak or update firmware.
+
+1. DOCKER (skip this if it is already installed)
+Use the official Ubuntu instructions:
+https://docs.docker.com/engine/install/ubuntu/
+Open Terminal: Ctrl+Alt+T. Paste using Ctrl+Shift+V. Enter runs a command.
+A sudo password is your computer login password; typing it shows no characters.
+These installation commands are for Ubuntu, not Windows/macOS/other distributions.
+They are shown as instructions; Docker was already installed on the recording PC.
+
+sudo apt update
+sudo apt install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF_DOCKER
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF_DOCKER
+
+sudo apt update
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo docker run hello-world
+
+docker compose version
+
+If Docker reports it cannot connect to the daemon, start Docker Engine with
+sudo systemctl start docker, then try again.
+If Docker commands report permission denied, prefix them with sudo. For example:
+sudo docker compose -p ps4-setup-video up -d
+Do not reinstall Docker on a computer with existing services just for this guide.
+
+2. FIND YOUR COMPUTER'S LAN IP
+hostname -I
+
+Choose the address of the active home-network connection, not a Docker bridge.
+Ubuntu Network/Wi-Fi connection settings also show its IPv4 address.
+The recording PC is 10.1.14.10. YOUR address will usually be different.
+Never put localhost, 127.0.0.1 or 0.0.0.0 in the PS4 source field.
+
+3. CREATE THE LIBRARY
+mkdir -p ps4-library/data/pkgs/games ps4-library/data/covers ps4-library/data/json
+cd ps4-library
+curl -fL https://raw.githubusercontent.com/e1z0/FPKGi-node-server/main/docker-compose.example.yml -o compose.yaml
+
+4. CREATE .env BESIDE compose.yaml
+Replace 10.1.14.10 below with YOUR computer's LAN IP BEFORE running this block.
+Run id -u and id -g to check your user/group IDs. Replace 1000 if yours differ.
+The two tutorial ports are 18080 (packages/covers) and 13000 (library/JSON).
+These differ from the project's defaults because 8080 was occupied on this PC.
+
+cat > .env <<'EOF_ENV'
+FPKGI_PUBLIC_ADDRESS=10.1.14.10:18080
+FPKGI_HTTP_PORT=18080
+FPKGI_JSON_PORT=13000
+PUID=1000
+PGID=1000
+FPKGI_SCAN_INTERVAL_SECONDS=300
+EOF_ENV
+
+cat .env
+
+5. ADD PACKAGES
+Copy compatible .pkg files you are entitled to use into data/pkgs/games/.
+Do not put a ZIP in place of an extracted PKG. Subfolders under games are allowed.
+The recording uses the project's own installer as a small scanner example:
+
+curl -fL https://github.com/e1z0/PS4-Games-Installer/releases/download/r40/PS4Game_installer-r40.pkg -o data/pkgs/games/PS4Game_installer-r40.pkg
+
+That is a fixed RECORDING EXAMPLE. Get the newest public installer for actual use:
+https://github.com/e1z0/PS4-Games-Installer/releases
+Do not reinstall the running installer from its own library.
+
+6. VALIDATE AND START (from ps4-library)
+docker compose -p ps4-setup-video config --quiet
+docker compose -p ps4-setup-video up -d
+docker compose -p ps4-setup-video ps
+docker compose -p ps4-setup-video logs --tail 18
+
+All commands use the fixed project name ps4-setup-video to identify this setup.
+Keep the -p ps4-setup-video option in start, status, logs, updates and stop commands.
+Wait for healthy and for the initial package scan to finish.
+
+7. CHECK IN YOUR COMPUTER'S BROWSER
+http://YOUR_COMPUTER_IP:13000/
+
+Click games for its JSON link. The eye icon opens the parsed browser library.
+The PS4 Games JSON URL is:
+http://YOUR_COMPUTER_IP:13000/games
+
+The actual recording URL is http://10.1.14.10:13000/games.
+Use YOUR address, not the recording address.
+Do not add .json on this server. Do not use /library/?cat=games as a JSON source.
+Package URLs inside the JSON should use YOUR_COMPUTER_IP:18080.
+Both ports must be reachable from the PS4. Do not forward them on your router.
+
+8. INSTALL THE PS4 APP
+On GitHub, scroll to Assets and expand it if needed. Click the newest public
+.pkg asset, not either Source code archive:
+https://github.com/e1z0/PS4-Games-Installer/releases
+
+Copy the installer PKG to the root (top level) of an existing exFAT file-storage
+USB stick. Safely eject it, then connect it to the PS4. Formatting erases files;
+use a prepared spare stick instead of formatting a drive with valuable data.
+
+With GoldHEN active:
+GoldHEN > Debug Settings > Package Source: USB or All > Package Installer
+Choose the PS4 Games Installer package and confirm.
+Menu locations vary: some older layouts use
+Settings > Debug Settings > Game > Package Installer.
+
+9. CONFIGURE PS4 GAMES INSTALLER
+Open the installed app.
+Options > Settings > Games JSON URL > enter http://YOUR_COMPUTER_IP:13000/games
+Finish the PS4 keyboard using its Done button.
+Test connection > Save settings > O back
+Options > Refresh library > Available
+
+X/Cross: select, confirm installation, or launch an Installed game.
+Square: game details. Triangle: actions. Options: main menu. O/Circle: back.
+
+Available > select a compatible package > X > confirm.
+Options > Downloads: wait for Completed. 100% download alone is not installation.
+Keep the app and server open during transfers. Allow internal staging space plus
+installation space. Supported newer builds serialize installations after download.
+Settings > Installation destination selects internal or PS4 Extended Storage.
+A normal USB package-transfer stick is not PS4 Extended Storage.
+Installed > X launches a game; a PS4 close-app confirmation can appear.
+
+10. MAINTENANCE / TROUBLESHOOTING
+New files: place them in category folders, wait up to 5 minutes, refresh on PS4.
+Check status: docker compose -p ps4-setup-video ps
+Read errors: docker compose -p ps4-setup-video logs --tail 50
+Restart/rescan: docker compose -p ps4-setup-video restart
+Update server image: docker compose -p ps4-setup-video pull, then docker compose -p ps4-setup-video up -d
+Stop server: docker compose -p ps4-setup-video down (mounted data folders are retained).
+
+No category/packages: check data/pkgs/games/, permissions and scan logs.
+Permission errors: check PUID/PGID against id -u / id -g and directory ownership.
+Address already in use: choose unused host ports in .env and recreate with up -d.
+Missing variable: .env and compose.yaml must be in the same working directory.
+PS4 cannot connect: PC on, healthy container, correct LAN IP, both ports allowed
+on the trusted LAN, no guest-Wi-Fi device isolation, no localhost address.
+If your computer IP changes, update .env, recreate the container, then update and
+save the PS4 source. A router DHCP address reservation can keep it stable.
+
+OFFICIAL REFERENCES
+https://github.com/e1z0/PS4-Games-Installer
+https://github.com/e1z0/FPKGi-node-server
+https://github.com/GoldHEN/GoldHEN
+https://docs.docker.com/engine/install/ubuntu/
