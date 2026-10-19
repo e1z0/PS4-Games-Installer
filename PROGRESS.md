@@ -1,5 +1,129 @@
 # Implementation progress
 
+## Internet Archive authenticated downloads — 2026-10-19
+
+- r45 passes TLS on the user's PS4 9.00 but receives HTTP 401 for a package that
+  also fails anonymous laptop requests. Browser-style headers, ordinary redirect
+  cookie handling and removing Range do not change that response. The user then
+  confirms the exact package downloads after signing into Archive.org.
+- Add an Archive.org account screen and normal verified-HTTPS account login.
+  Keep only login cookies in a separate private console file; password input is
+  masked and cleared. The public JSON, saved settings, queue and backups contain
+  no credentials. Existing diagnostics contain only bounded non-secret errors.
+- Reuse the existing worker and staged package downloader. Both the package
+  probe and full transfer receive the captured session; each redirect checks the
+  destination before attaching it. Login requests never follow redirects.
+- Failed login/session writes preserve prior state. Local sign-out removes the
+  saved session; expired access requires signing in again. This addresses access,
+  not Archive.org throughput. Actual console login/full installation remain pending.
+- Full host/native suite and all 19 Python integrations pass. Focused native tests
+  verify login method/body/length/encoding, no login redirects, bounded replies,
+  cookie origin scoping, probe/full-transfer propagation and secret-free failures.
+  Session tests cover parsing/injection, private file modes, corruption and deletion.
+  App tests cover failed replacement/save, restart, busy-worker sign-out and
+  credential exclusion from configuration/queue/logs. Final UI/App regressions pass.
+- Desktop account/password/settings captures were inspected; passwords are masked.
+  Native IME options compile but physical keyboard masking still needs verification.
+  No user credentials were read, logged, added to public JSON or uploaded over FTP.
+- Built and validated `dist/PS4Game_installer-r46.pkg` with the pinned toolchain.
+  SHA-256: `1fc7ca5048e0b38330b3cf7bcdbd1d85b6d9ee2d6c996162f9f13cd30ca66480`.
+
+## GoDaddy G2 compatibility anchor — 2026-10-19
+
+- Retrieved the real r44 console log after the user installed and retried. Failure
+  remains at archive.org before redirects: send=0x8095F00C, ssl=0x8095F00A,
+  verify=0x20 (unknown CA), ca=121, ca_load=0, keepalive=1. This rules out the
+  connection-mode change alone as a sufficient fix on this firmware 9.00 console.
+- The live server supplies GoDaddy's G2 intermediate plus a cross-signed G2 root
+  and legacy Class2 root. The bundled self-signed G2 root validates the current
+  intermediate/leaf in desktop OpenSSL. Firmware path construction remains an
+  inference; the device error does not expose its selected chain.
+- Add only the official, pinned G2 issuing certificate as a compatibility anchor,
+  as documented by SSPI for this chain. Keep the existing roots, keepalive and
+  validation policy unchanged so this is one trust-input change for the next test.
+  The anchor is not host-specific and avoids ancestor checks above this issuer;
+  its root is already trusted, and its signature/CA constraints are verified.
+- The extra asset loads before libjbc changes the filesystem root and remains
+  alive with the other PEM records. Tests reject missing/multiple compatibility
+  certificates. Native fixtures verify all three fixture records and metadata;
+  they cannot reproduce firmware cryptography.
+- Native HTTP regressions, both startup tests and all three certificate/package
+  asset tests pass. The package builds and passes its hash/signature/import checks.
+  r45 SHA-256: `13dba839a75b8a57876bedff4bf1e55515bf122a88f5dfcfd9005277c518a387`.
+- Uploaded r45 using the existing FTP helper. The user installed it and retried
+  the same package on PS4 9.00. Its actual log now reports Package HTTP 401 rather
+  than the r44 unknown-CA error, confirming HTTPS passes for this request.
+- A bounded desktop GET probe follows archive.org's HTTPS redirect to the download
+  CDN and reproduces HTTP 401 Authorization Required. Another attempted file
+  returns HTTP 500 there. These are upstream access/server responses; no package
+  download or completed installation is established. No authentication was bypassed.
+- This hardware A/B confirms the added compatibility anchor resolves the reported
+  TLS rejection on firmware 9.00. It does not reveal the verifier's internal path
+  selection algorithm or establish general PS4 11.00/BGFT acceptance.
+
+## PS4 9.00 HTTPS compatibility follow-up — 2026-10-19
+
+- User hardware evidence: r42 shows artwork but its package request still fails
+  with `Send request (0x8095F00C)` on firmware 9.00. The generic installation-error
+  sentence was misleading because it appeared before any successful transfer.
+- Desktop TLS 1.2 handshakes verify the reported package host and CDN against the
+  packaged roots. Both supply GoDaddy G2 with a cross-signed chain. This confirms
+  desktop trust, not the console's chain-building behavior.
+- SSPI documents that PS4's non-keepalive connection path can lose custom trust.
+  Changed the connection flag to keepalive without changing roots or weakening
+  verification. Request/connection/template cleanup remains per transfer/hop.
+  This is a supported compatibility candidate; its effect on this console is
+  unconfirmed. No intermediate anchors or certificate bypasses were added.
+- A native fixture modeling the documented API behavior failed before the flag
+  change with unknown CA. This is contract evidence, not hardware reproduction.
+  Send failures now identify the hostname and redirect count without URL secrets.
+  The dialog uses neutral text instead of claiming a package download occurred.
+- Read the actual console app.log over user-provided FTP: r42 fetches 865 catalog
+  entries, but multiple package-header probes fail with unknown CA before any
+  download/install. Some CDN artwork reaches HTTP 500 after successful TLS;
+  that host uses Let's Encrypt while the failing package origin uses GoDaddy G2.
+- Added native SSL number/verification flags, errno, CA count/load result and
+  keepalive mode to send-failure diagnostics through the existing App::log path.
+  Getters run before abort/deletion and cannot replace the original failure.
+  Private FTP data stays in ignored build/diagnostics and is not published.
+- Focused native HTTP fixtures and real HTTP/TLS catalog/package integration
+  tests passed. Generated the desktop captures and inspected the corrected error
+  dialog; wrapping and buttons remain clear. No generated captures were committed.
+- `make all` produced r44; `make validate` passed hashes/signatures and packed
+  imports. SHA-256: `5f5d4a64b3a22792d13124b9dc7a167000404845d1a545ea5b122fe55127587b`.
+  Uploaded this package to the console's package folder using the existing FTP
+  deployment helper; installation/retry is pending user action.
+- The upstream PR is a draft pending firmware 9.00 acceptance. The native fixture
+  models a documented behavior; neither it nor desktop TLS tests prove this
+  compatibility change resolves the console's actual handshake failure.
+
+## HTTPS compatibility investigation — 2026-10-19
+
+- A reported catalog/package request failed with `0x8095F00C` (unknown CA).
+  The native client initialized SSL/HTTP without registering trust anchors and
+  rejected all redirects. BGFT's independent trust store also makes remote HTTPS
+  registration unsuitable for roots loaded only in this app.
+- Original native HTTP, real HTTP integration and download tests passed on the
+  unchanged r40 snapshot. New local download regressions failed before the fix:
+  HTTP redirects and HTTP-to-HTTPS returned HTTP 302, and private-fixture HTTPS
+  failed certificate verification. No external game package was downloaded.
+- Added pinned Mozilla roots, bounded strict redirects, full-length HTTPS probes
+  and reuse of the existing staging/local-install path. Cached CA assets load
+  before the libjbc root transition; no later dependency on `/app0` remains.
+- `make test` passed the complete host/native suite and 18 Python tests. Local TLS
+  fixtures cover verified catalog/package downloads, HTTP-to-HTTPS upgrades,
+  untrusted roots/hostname rejection, direct HTTP BGFT routing and HTTPS staging
+  reuse. Native fixtures cover registration ABI/lifetime, cleanup/retry, prewarming
+  across the root transition, bounded redirects and strict catalog/package TLS.
+  Catalog/artwork requests preserve support for responses without Content-Length.
+- `make all` produced r42, and `make validate` passed package hashes/signatures and
+  packed imports. The package fingerprint matches revision.json and its manifest;
+  SHA-256 is `64acdcf848170d51131592cbd9ec9353393db211bb2781ab9a9a1eca802e749c`.
+- No physical PS4 is connected; hardware acceptance remains pending and the
+  manifest explicitly keeps hardware_tested false. No console deployment occurred.
+  Existing staging, leases and local installation were reused; no new service,
+  runtime trust override, catalog schema or settings migration was added.
+
 ## r40 release notes — 2026-10-18
 
 - Created the requested temporary realease_notes.md with consumer release

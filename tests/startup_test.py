@@ -17,7 +17,7 @@ class StartupRegression(unittest.TestCase):
             root = Path(directory)
             (root / "assets").mkdir()
             (root / "build").mkdir()
-            for name in ("font.ttf", "icon.png"):
+            for name in ("font.ttf", "icon.png", "cacert.pem", "godaddy-secure-g2.pem"):
                 shutil.copyfile(PROJECT / "assets" / name, root / "assets" / name)
             env = dict(os.environ)
             env.pop("PSGI_TEST_STARTUP_FAILURE", None)

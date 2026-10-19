@@ -1,4 +1,5 @@
 #include "video.hpp"
+#include <algorithm>
 #include <chrono>
 #include "text.hpp"
 #include <cstring>
@@ -170,6 +171,7 @@ Video::Video(bool) {
 }
 Video::~Video() {
     if (keyboard) { sceImeDialogAbort(); sceImeDialogTerm(); }
+    std::fill(inputBuffer.begin(), inputBuffer.end(), 0);
     if (pad >= 0) scePadClose(pad);
     if (video >= 0) sceVideoOutClose(video);
     if (memory) sceKernelMunmap(memory, allocation);
@@ -212,13 +214,23 @@ void Video::startKeyboard(Ui& ui) {
     OrbisImeDialogSetting params{};
     params.userId = userId;
     params.type = ui.editKind == EditKind::SourceUrl ? ORBIS_TYPE_TYPE_URL : ORBIS_TYPE_DEFAULT;
+    if (ui.editKind == EditKind::ArchiveEmail) params.type = ORBIS_TYPE_MAIL;
+    if (ui.editKind == EditKind::ArchivePassword) {
+        // SceIme option bits are omitted from the pinned OpenOrbis header.
+        constexpr uint32_t password = 4, noAutoCapitalization = 2, noLearning = 32,
+                           disableResume = 256, disableAutoSpace = 512;
+        params.option = password | noAutoCapitalization | noLearning | disableResume | disableAutoSpace;
+    }
     params.maxTextLength = maximum;
     // SceIme uses UTF-16; the OpenOrbis wchar_t* declaration has a 32-bit host type.
     params.inputTextBuffer = reinterpret_cast<wchar_t*>(inputBuffer.data());
     params.title = reinterpret_cast<const wchar_t*>(inputTitle.c_str());
     params.enterLabel = ORBIS_BUTTON_LABEL_DEFAULT;
     int result = sceImeDialogInit(&params, nullptr);
-    if (result < 0) throw std::runtime_error("The PS4 on-screen keyboard could not be opened");
+    if (result < 0) {
+        std::fill(inputBuffer.begin(), inputBuffer.end(), 0);
+        throw std::runtime_error("The PS4 on-screen keyboard could not be opened");
+    }
     keyboard = true;
 }
 void Video::pollKeyboard(Ui& ui) {
@@ -231,6 +243,7 @@ void Video::pollKeyboard(Ui& ui) {
         while (size + 1 < inputBuffer.size() && inputBuffer[size]) ++size;
         ui.finishEdit(fromUtf16(inputBuffer.data(), size));
     } else ui.finishEdit({});
+    std::fill(inputBuffer.begin(), inputBuffer.end(), 0);
     flushInput();
 }
 }

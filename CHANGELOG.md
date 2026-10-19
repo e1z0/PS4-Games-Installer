@@ -1,5 +1,49 @@
 # Changelog
 
+## r46 — Internet Archive sign-in — 2026-10-19
+
+- Add a masked Archive.org account sign-in/sign-out screen for downloads that
+  require an account with access to the file.
+- Save login cookies in a separate private console session file and attach them
+  only to verified HTTPS Archive.org package requests, including CDN redirects.
+- Reuse existing package staging/local installation; keep credentials out of
+  catalogs, queue records, backups and diagnostics. Passwords are not saved.
+- Full host/native suite and 19 Python integrations passed, with UI captures and
+  package validation. Console account login and full installation remain pending.
+
+## r45 — GoDaddy HTTPS chain compatibility — 2026-10-19
+
+- Load GoDaddy's exact published G2 issuing certificate alongside the unchanged
+  Mozilla roots, addressing the documented legacy cross-signed-chain limitation.
+- Pin the asset, verify its signature/CA constraints and package it with provenance.
+  Catalog/package certificate checks remain enabled; no trust bypass is added.
+- Firmware 9.00 hardware comparison: r44 fails unknown CA; the same request on r45
+  reaches HTTP 401 from the file host. Desktop probes confirm upstream 401/500
+  responses. TLS is working for that request; full installation remains unverified.
+
+## r44 — PS4 HTTPS compatibility follow-up — 2026-10-19
+
+- Select the native keepalive connection mode documented to retain custom HTTPS
+  trust. Keep the existing CA bundle and certificate checks unchanged.
+- Show the failing hostname and redirect count on send errors, without exposing
+  signed paths/queries. Describe unknown-CA errors as certificate trust failures.
+- Record SSL/verification errors, errno and CA-load metadata through the existing
+  app.log error path, preserving the original failure if diagnostics are unavailable.
+- Replace the misleading download sentence shown for every installation error.
+- r42 failed verified package HTTPS on a user's PS4 9.00; r44 needs a console
+  retest and is not yet a hardware-confirmed fix.
+
+## r42 — HTTPS compatibility — 2026-10-19
+
+- Load a pinned Mozilla CA bundle for verified native HTTPS catalogs/packages.
+- Follow up to five HTTP(S) redirects while rejecting HTTPS downgrades.
+- Stage HTTPS packages through the app before local installation; keep remote
+  BGFT installation for resolved HTTP URLs with Range support.
+- Retain catalog URL identity and complete staging reuse across redirects/retries.
+- Full host suite (including 18 Python tests), native HTTP regressions and PS4
+  package validation passed. Hardware acceptance on PS4 11.00 + GoldHEN remains
+  pending.
+
 ## Release documentation — 2026-10-18
 
 - Prepare concise r40 release highlights in a temporary, Git-ignored notes file.

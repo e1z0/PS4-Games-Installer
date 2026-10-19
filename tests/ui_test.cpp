@@ -29,6 +29,7 @@ void wrapNavigation() {
     const Menu menus[] = {
         {Screen::Options, &Ui::menuIndex, ui.options().size()},
         {Screen::Settings, &Ui::settingsIndex, ui.settingRows().size()},
+        {Screen::ArchiveAccount, &Ui::archiveIndex, ui.archiveRows().size()},
         {Screen::Sources, &Ui::sourceIndex, ui.draft.sources.size(), 1},
         {Screen::Storage, &Ui::storageIndex, 2},
         {Screen::Actions, &Ui::menuIndex, ui.actionRows().size()},
@@ -151,7 +152,58 @@ void wrapNavigation() {
     }
     std::puts("Wraparound navigation passed for 22 menus, sidebar, ragged tiles, summary, shrinking/empty lists and confirmation guards");
 }
+void archiveAccount() {
+    auto ui = fixture();
+    ui.draft = ui.settings;
+    const auto before = ui.draft;
+    const auto rows = ui.settingRows();
+    assert(rows[10] == "Save settings" && rows[16] == "Server profiles" && rows[17] == "Archive.org account");
+    ui.screen = Screen::Settings; ui.settingsIndex = 17; ui.handle(Button::Cross);
+    assert(ui.screen == Screen::ArchiveAccount && ui.archiveIndex == 0);
+    Command command;
+    ui.archiveIndex = 2; ui.handle(Button::Cross);
+    assert(!ui.take(command) && !ui.archiveBusy && !ui.archiveNotice.empty());
+    ui.archiveIndex = 0; ui.handle(Button::Cross);
+    assert(ui.screen == Screen::Keyboard && ui.editKind == EditKind::ArchiveEmail);
+    assert(ui.take(command) && command.type == CommandType::Keyboard && command.text.empty());
+    ui.finishEdit("player@example.com");
+    assert(ui.archiveEmail == "player@example.com" && ui.keyboardText.empty());
+    ui.archiveIndex = 1; ui.handle(Button::Cross);
+    assert(ui.editKind == EditKind::ArchivePassword && ui.take(command) && command.text.empty());
+    ui.keyboardText = "test-password";
+    assert(ui.keyboardDisplayText() == "*************");
+    ui.finishEdit(ui.keyboardText);
+    assert(ui.archivePassword == "test-password" && ui.keyboardText.empty());
+    const auto accountRows = ui.archiveRows();
+    assert(accountRows[1] == "Password: ********");
+    for (const auto& row : accountRows) assert(row.find("test-password") == std::string::npos);
+    ui.archiveIndex = 2; ui.handle(Button::Cross);
+    assert(ui.take(command) && command.type == CommandType::ArchiveSignIn);
+    assert(command.archiveEmail == "player@example.com" && command.archivePassword == "test-password");
+    assert(ui.archivePassword.empty() && ui.keyboardText.empty() && ui.archiveBusy && !ui.archiveSignedIn);
+    assert(!command.configuration && command.text.empty() && command.previous.empty());
+    ui.handle(Button::Cross); assert(!ui.take(command));
+    ui.handle(Button::Circle);
+    assert(ui.screen == Screen::Settings && ui.archiveBusy && sameSettings(ui.draft, before));
+    ui.handle(Button::Cross); assert(ui.screen == Screen::ArchiveAccount);
+    ui.archiveIndex = 0; ui.handle(Button::Cross); assert(ui.screen == Screen::ArchiveAccount && !ui.take(command));
+    // Only the worker's completion changes account status; returning does not cancel it.
+    ui.archiveBusy = false; ui.archiveSignedIn = true;
+    ui.archiveIndex = 3; ui.handle(Button::Cross);
+    assert(ui.take(command) && command.type == CommandType::ArchiveSignOut && command.archivePassword.empty());
+    assert(ui.archiveBusy); ui.handle(Button::Cross); assert(!ui.take(command));
+    ui.archiveBusy = false; ui.archiveSignedIn = false;
+    // Clearing a corrupt or expired saved session must also work when signed out.
+    ui.handle(Button::Cross); assert(ui.take(command) && command.type == CommandType::ArchiveSignOut);
+    assert(ui.archiveBusy); ui.archiveBusy = false;
+    ui.archiveIndex = 1; ui.handle(Button::Cross); drain(ui);
+    ui.keyboardText = "cancelled-password"; ui.finishEdit({});
+    assert(ui.archivePassword.empty() && ui.keyboardText.empty() && ui.screen == Screen::ArchiveAccount);
+    ui.archivePassword = "discard-on-back"; ui.handle(Button::Circle);
+    assert(ui.archivePassword.empty() && ui.screen == Screen::Settings && sameSettings(ui.draft, before));
+}
 int main() {
+    archiveAccount();
     wrapNavigation();
     Command command;
     auto ui = fixture();

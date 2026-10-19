@@ -16,13 +16,13 @@ extern "C" int stat(const char* path, struct stat* result) noexcept {
 }
 
 namespace {
-std::string mode, directory, url;
+std::string mode, directory, url, remoteUrl;
 int remoteCalls = 0, localCalls = 0, updates = 0;
 std::atomic<bool> cancelled{false};
 }
 namespace psgi {
 uint64_t freeSpace(const std::string&) { return mode == "space" ? 1024 : 1000000000; }
-int queueInstall(const Entry& e, int user) { assert(user == 123 && e.url == url); ++remoteCalls; return 91; }
+int queueInstall(const Entry& e, int user) { assert(user == 123 && e.url == remoteUrl); ++remoteCalls; return 91; }
 int queueLocalInstall(const Entry& e, const std::string& path, int user) {
     assert(user == 123 && e.url == url && path == stagedPackagePath(directory, url));
     std::ifstream file(path, std::ios::binary | std::ios::ate); const auto size = file.tellg();
@@ -41,7 +41,8 @@ int queueLocalInstall(const Entry& e, const std::string& path, int user) {
 }
 }
 int main(int argc, char** argv) {
-    assert(argc == 4); url = argv[1]; directory = argv[2]; mode = argv[3];
+    assert(argc == 4 || argc == 5); url = argv[1]; directory = argv[2]; mode = argv[3];
+    remoteUrl = argc == 5 ? argv[4] : url;
     psgi::Entry entry; entry.name = "Test package"; entry.url = url;
     const auto path = psgi::stagedPackagePath(directory, url);
     try {
@@ -49,8 +50,9 @@ int main(int argc, char** argv) {
             ++updates; assert(bytes <= total);
             if (mode == "cancel" && bytes) cancelled = true;
         });
-        assert(mode == "range" || mode == "local");
-        if (mode == "range") assert(task == 91 && remoteCalls == 1 && localCalls == 0 && updates == 0);
+        assert(entry.url == url); // Redirects must not change the catalog/queue identity.
+        assert(mode == "range" || mode == "redirect" || mode == "local" || mode == "https-range" || mode == "upgrade");
+        if (mode == "range" || mode == "redirect") assert(task == 91 && remoteCalls == 1 && localCalls == 0 && updates == 0);
         else {
             assert(task == 92 && localCalls == 1 && remoteCalls == 0 && updates > 1);
             assert(psgi::installPackage(entry, 123, directory, &cancelled, [](uint64_t, uint64_t) {}) == 92);
@@ -69,7 +71,8 @@ int main(int argc, char** argv) {
         else if (mode == "cancel") assert(message.find("cancelled") != std::string::npos);
         else if (mode == "space") assert(message.find("Not enough internal") != std::string::npos);
         else if (mode == "unknown-length") assert(message.find("Content-Length") != std::string::npos);
-        else if (mode == "truncated") assert(message.find("transfer failed") != std::string::npos);
+        else if (mode == "truncated") assert(message.find("Package download failed") != std::string::npos);
+        else if (mode == "tls-error") assert(message.find("certificate") != std::string::npos);
         else throw;
         assert(remoteCalls == 0 && localCalls == 0);
         assert(!std::filesystem::exists(path) && !std::filesystem::exists(path + ".part"));

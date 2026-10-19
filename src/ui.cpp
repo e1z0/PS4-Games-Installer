@@ -19,6 +19,8 @@ std::string groupName(Grouping group) {
     return names[static_cast<int>(group)];
 }
 size_t keyboardMaximum(EditKind kind) {
+    if (kind == EditKind::ArchiveEmail) return 254;
+    if (kind == EditKind::ArchivePassword) return 1024;
     if (kind == EditKind::SourceUrl || kind == EditKind::SetupUrl) return 2047;
     if (kind == EditKind::SourceCategory) return 32;
     if (kind == EditKind::Search || kind == EditKind::SavedQuery) return 128;
@@ -27,6 +29,8 @@ size_t keyboardMaximum(EditKind kind) {
 }
 std::string keyboardTitle(EditKind kind) {
     switch (kind) {
+        case EditKind::ArchiveEmail: return "Archive.org email";
+        case EditKind::ArchivePassword: return "Archive.org password";
         case EditKind::SourceUrl: return "Games JSON URL";
         case EditKind::SetupUrl: return "Test a games JSON URL";
         case EditKind::SavedName: return "Saved collection name";
@@ -172,6 +176,18 @@ void Ui::beginEdit(EditKind kind, size_t index, const std::string& text) {
 }
 void Ui::finishEdit(const std::optional<std::string>& text) {
     screen = keyboardReturn;
+    if (editKind == EditKind::ArchiveEmail || editKind == EditKind::ArchivePassword) {
+        if (text) {
+            if (text->size() > keyboardMaximum(editKind)) archiveNotice = "Account entry is too long. Please enter it again.";
+            else {
+                if (editKind == EditKind::ArchiveEmail) archiveEmail = *text;
+                else archivePassword = *text;
+                archiveNotice.clear();
+            }
+        } else archivePassword.clear();
+        keyboardText.clear();
+        return;
+    }
     if (!text) return;
     if (editKind == EditKind::ProfileName || editKind == EditKind::RenameProfile) {
         try {
@@ -245,7 +261,15 @@ std::vector<std::string> Ui::settingRows() const {
         draft.notInstalledOnly ? "Available: Not installed" : "Available: All packages",
         draft.animations ? "Background animation: On" : "Background animation: Off",
         draft.refreshOnStart ? "Refresh on startup: On" : "Refresh on startup: Off",
-        "Test connection", "Clear artwork cache", "Save settings", "Installation destination", "Connection setup helper", draft.descending ? "Order: Descending" : "Order: Ascending", "Storage cleanup", "Export diagnostics to USB", "Server profiles"};
+        "Test connection", "Clear artwork cache", "Save settings", "Installation destination", "Connection setup helper", draft.descending ? "Order: Descending" : "Order: Ascending", "Storage cleanup", "Export diagnostics to USB", "Server profiles", "Archive.org account"};
+}
+std::vector<std::string> Ui::archiveRows() const {
+    return {"Email: " + (archiveEmail.empty() ? "Not entered" : archiveEmail),
+        std::string("Password: ") + (archivePassword.empty() ? "Not entered" : "********"),
+        archiveBusy ? "Please wait..." : "Sign in", "Sign out"};
+}
+std::string Ui::keyboardDisplayText() const {
+    return editKind == EditKind::ArchivePassword ? std::string(keyboardText.size(), '*') : keyboardText;
 }
 std::vector<std::string> Ui::actionRows() const {
     std::vector<std::string> rows;
@@ -315,6 +339,29 @@ void Ui::handle(Button b) {
     if (handleDetails(b)) return;
     // Circle and dialogs are handled before dashboard shortcuts.
     if (screen == Screen::Keyboard) return;
+    if (screen == Screen::ArchiveAccount) {
+        if (b == Button::Circle) {
+            archivePassword.clear(); keyboardText.clear(); screen = Screen::Settings; return;
+        }
+        moveMenuSelection(b, archiveIndex, archiveRows().size());
+        if (b != Button::Cross || archiveBusy) return;
+        if (archiveIndex == 0) beginEdit(EditKind::ArchiveEmail, 0, archiveEmail);
+        else if (archiveIndex == 1) {
+            archivePassword.clear(); beginEdit(EditKind::ArchivePassword, 0, "");
+        } else if (archiveIndex == 2) {
+            if (archiveEmail.empty() || archivePassword.empty()) {
+                archiveNotice = "Enter your Archive.org email and password first."; return;
+            }
+            Command command{}; command.type = CommandType::ArchiveSignIn;
+            command.archiveEmail = archiveEmail; command.archivePassword = std::move(archivePassword);
+            commands.push_back(std::move(command));
+            archivePassword.clear(); keyboardText.clear(); archiveBusy = true; archiveNotice = "Signing in...";
+        } else {
+            archivePassword.clear(); keyboardText.clear(); archiveBusy = true; archiveNotice = "Signing out...";
+            emit(CommandType::ArchiveSignOut);
+        }
+        return;
+    }
     if (handleBrowsing(b)) return;
     if (handleFeatures(b)) return;
     if (screen == Screen::DiscardLocal) {
@@ -509,6 +556,7 @@ void Ui::handle(Button b) {
             case 14: maintenanceReturn = Screen::Settings; screen = Screen::Cleanup; featureNotice.clear(); emit(CommandType::ScanUsage); break;
             case 16: profileIndex=0; profileReturn=Screen::Settings; browseNotice.clear(); screen=Screen::ServerProfiles; break;
             case 15: maintenanceReturn = Screen::Settings; screen = Screen::Diagnostics; featureNotice.clear(); emit(CommandType::ScanBackups); break;
+            case 17: archiveIndex = 0; archivePassword.clear(); keyboardText.clear(); screen = Screen::ArchiveAccount; break;
         }
         return;
     }

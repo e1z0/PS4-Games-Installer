@@ -44,6 +44,11 @@ void capture(App& app, Renderer& renderer, Canvas& canvas) {
     ui.screen = Screen::Storage; shot("13-storage-available");
     ui.storage.external = {}; shot("14-storage-unavailable");
     ui.screen = Screen::Keyboard; ui.keyboardText = ui.draft.sources[0].url; shot("07-url-editor");
+    ui.screen = Screen::ArchiveAccount; ui.archiveEmail = "player@example.com";
+    ui.archivePassword = "preview-only-password"; ui.archiveIndex = 2; shot("93-archive-account");
+    ui.screen = Screen::Keyboard; ui.editKind = EditKind::ArchivePassword;
+    ui.keyboardText = ui.archivePassword; shot("94-archive-password");
+    ui.archivePassword.clear(); ui.archiveEmail.clear(); ui.keyboardText.clear(); ui.editKind = EditKind::SourceUrl;
     ui.pending = ui.available[0]; ui.openDetails(Screen::Dashboard); shot("08-details");
     ui.pending = ui.available[1]; ui.openDetails(Screen::Dashboard); shot("85-details-igdb");
     ui.detailIndex=ui.detailRows().size()-2; ui.detailScroll=ui.detailIndex>10 ? ui.detailIndex-10 : 0; shot("86-details-collapsed");
@@ -205,6 +210,7 @@ static int runApplication(int argc, char** argv) {
         // libjbc changes the filesystem root. Read /app0 resources while the
         // application's sandbox paths are still accessible.
         Renderer renderer(assets);
+        prepareHttpTrust();
         prepareConsole();
 #ifdef PSGI_HOST
         App app(data, true);

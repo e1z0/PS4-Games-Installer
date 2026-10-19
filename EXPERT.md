@@ -199,16 +199,26 @@ successes and artwork failures using cache filenames, without source image URLs.
 
 ![A failed screenshot with retry controls (desktop preview)](docs/images/screenshot-error.png)
 
-Serve catalogs as direct HTTP 200, uncompressed JSON responses. Redirects and
-interactive authentication are not supported. Package hosting must support direct
-URLs and correct content lengths. HTTP Range support enables background downloads
-without an extra staging copy. Servers that ignore ranges use the direct-download
-fallback described below. Catalog/package TLS verification remains enabled;
-firmware TLS/certificate support can limit which HTTPS hosts work. On PS4, public
-artwork under `https://images.igdb.com/igdb/image/upload/` uses the OpenOrbis HTTP
-sample's certificate compatibility callback so firmware certificate errors do not
-block these images. This exception applies only to that image origin/path;
-redirects stay disabled and other artwork origins keep normal verification.
+Serve catalogs as HTTP 200, uncompressed JSON responses. The client follows up to
+five HTTP 301/302/303/307/308 redirects, including relative URLs and HTTP-to-HTTPS
+upgrades. HTTPS-to-HTTP downgrades, non-HTTP schemes, credentials in URLs and
+missing/ambiguous redirect locations are rejected. Interactive authentication is
+not supported. Package hosting must provide correct content lengths.
+
+Catalog/package TLS verification remains enabled. The app loads a pinned Mozilla
+root certificate bundle into its native HTTP context, plus the pinned GoDaddy G2
+issuing certificate for older firmware's cross-signed-chain compatibility. This
+addresses missing trusted roots (`0x8095F00C`); firmware TLS protocol/cipher support, certificate
+expiry, hostname mismatches and incomplete server chains can still cause failures.
+The PS4 clock must be correct. HTTP Range support enables background downloads
+without an extra staging copy only when the resolved package URL is HTTP. HTTPS
+packages always use the app's verified download client before local installation;
+PS4's separate BGFT service does not share the app's trusted certificates.
+
+On PS4, public artwork under `https://images.igdb.com/igdb/image/upload/` retains
+its existing certificate compatibility callback. The exception is evaluated for
+each redirect hop; other origins/paths and all catalog/package requests retain
+normal verification.
 
 ### Connection setup helper
 
@@ -630,18 +640,22 @@ queue files are preserved and block new queue writes until repaired.
 
 ![Remove an inactive queue entry](docs/images/remove-queue-entry.png)
 
-The app checks the actual PKG URL with a small GET range request before submitting
-it. A 404, HTML response or invalid package signature is reported before creating
-a PS4 task. A server that responds with HTTP 206 uses BGFT directly.
+The app checks the actual PKG URL before submitting it. HTTP URLs use a small GET
+range request; HTTPS URLs use a normal GET that stops after the PKG signature,
+keeping the full content length available for retry/cache validation. A 404, HTML
+response or invalid package signature is reported before creating a PS4 task.
+A resolved HTTP URL that returns the requested four bytes with HTTP 206 uses BGFT
+directly. Redirect destinations do not replace the catalog entry's identity.
 
-When the server ignores ranges, the app streams the package to
+For HTTPS URLs, or when an HTTP server ignores ranges, the app streams the package to
 `/data/PS4-Game-Installer/downloads/`, then submits that local file to BGFT. This
 works around package servers that do not implement Range/HEAD correctly. **Keep
 the app open during the direct download.** Its percentage is shown in the status
 bar. Exiting cancels an unfinished transfer and removes the partial file. Internal
 storage needs room for the staging copy plus 64 MiB reserve, even when installing
 onto Extended Storage. Installing to internal storage also needs room for the
-installed game. Enable Range support on the server to avoid this extra copy.
+installed game. HTTP servers with Range support can avoid this extra copy; HTTPS
+packages require it even when the server supports ranges.
 
 **The download percentage measures the package copy, not installation.** After
 100%, the app still needs the PS4 to accept an installation task. A refusal opens
@@ -776,7 +790,7 @@ together. An existing new directory takes precedence.
 | Existing-title conflict | The installed title was preserved; this app does not force removal |
 | Settings cannot save | Check free space and access to the application data directory |
 | URL is saved but Available stays empty | Read the connection result in Settings and use a direct JSON URL, such as `/games`. For `Disable redirects (0x80431001)`, update to r15 or later, which binds every HTTP operation to one client module. The user subsequently confirmed artwork downloads work. |
-| HTTPS fails | Check server certificates and firmware TLS compatibility; a private LAN HTTP server is supported |
+| HTTPS fails | Use a build with the bundled CA store, verify the PS4 clock and server certificate chain, and check firmware TLS compatibility. Login requirements and HTTP 401/403/404/5xx responses must be resolved at the package host. |
 
 PS5, database repair, system-menu replacement and automatic game removal are outside
 this version. Runtime service behavior and frame rate still require console testing.

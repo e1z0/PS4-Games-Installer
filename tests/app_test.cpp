@@ -26,6 +26,8 @@ std::vector<psgi::Entry> localGames;
 std::string launchDirectory;
 bool allowLaunch = false, failLaunch = false, allowUninstall = false;
 int launchCalls = 0, uninstallCalls = 0;
+std::atomic<bool> failArchiveLogin{false}, expectArchiveDownload{false};
+std::atomic<int> archiveLoginCalls{0}, authenticatedTransfers{0};
 }
 namespace psgi {
 Video::Video(bool) {}
@@ -63,10 +65,24 @@ int queueInstall(const Entry&, int) {
 int queueLocalInstall(const Entry&, const std::string&, int) { throw std::runtime_error("PS4 required"); }
 bool retireInactiveTask(int task) { assert(task >= 45); return allowRetirement; }
 void cancelInstallTask(int task) { assert(task >= 45); ++cancellations; if (failCancellation) throw std::runtime_error("Cancellation fixture failed; task retained"); }
-HttpTransferInfo httpTransfer(const std::string&, const HttpSink& sink, bool range, const std::atomic<bool>* cancelled) {
+HttpTransferInfo httpTransfer(const std::string& url, const HttpSink& sink, bool range, const std::atomic<bool>* cancelled) {
     while (blockProbe && !(cancelled && *cancelled)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     if (cancelled && *cancelled) throw std::runtime_error("Download cancelled");
-    assert(allowInstalls && range); sink("\x7f" "CNT", 4, 4); return {206, 4};
+    assert(allowInstalls && range); sink("\x7f" "CNT", 4, 4); return {206, 4, url};
+}
+HttpTransferInfo httpTransferAuthenticated(const std::string& url, const HttpSink& sink, bool range,
+                                         const ArchiveSession& session, const std::atomic<bool>* cancelled) {
+    if (expectArchiveDownload) {
+        assert(session.user == "fixture%40example.test" && session.sig == "fixture-private-signature");
+        ++authenticatedTransfers;
+    }
+    return httpTransfer(url, sink, range, cancelled);
+}
+ArchiveSession archiveLogin(const std::string& email, const std::string& password, const std::atomic<bool>*) {
+    assert(email == "fixture@example.test" && password == "fixture-private-password");
+    ++archiveLoginCalls;
+    if (failArchiveLogin) throw std::runtime_error("Archive.org sign-in failed. Check your email and password.");
+    return {"fixture%40example.test", "fixture-private-signature"};
 }
 TaskProgress taskProgress(int task) {
     assert(task >= 45);
@@ -633,9 +649,68 @@ int main() {
     {App app(legacyCache);settle(app,video);assert(app.ui.available.size()==1 && app.ui.available[0].name=="Home cached");}
     auto externallyEdited=offline;externallyEdited.sources={{"games","http://different-server/games"}};saveSettings(legacyCache,externallyEdited);
     {App app(legacyCache);settle(app,video);assert(app.ui.available.empty());} // Legacy adoption must not repeat after an external URL change.
+    const auto archiveDirectory = directory + "/archive-account";
+    std::filesystem::create_directory(archiveDirectory);
+    saveSettings(archiveDirectory, offline);
+    auto signIn = [&](App& app) {
+        auto& ui = app.ui; ui.screen = Screen::ArchiveAccount; ui.archiveIndex = 2;
+        ui.archiveEmail = "fixture@example.test"; ui.archivePassword = "fixture-private-password";
+        ui.handle(Button::Cross);
+        assert(ui.archiveBusy && ui.archivePassword.empty() && ui.keyboardText.empty());
+        app.tick(0, video); settle(app, video);
+        assert(!ui.archiveBusy);
+    };
+    {
+        App app(archiveDirectory); settle(app, video);
+        assert(!app.ui.archiveSignedIn);
+        failArchiveLogin = true; signIn(app);
+        assert(!app.ui.archiveSignedIn && loadArchiveSession(archiveDirectory).empty());
+        assert(app.ui.archiveNotice.find("sign-in failed") != std::string::npos);
+        failArchiveLogin = false;
+        std::filesystem::create_directory(archiveDirectory + "/archive-session.json.tmp");
+        signIn(app);
+        assert(!app.ui.archiveSignedIn && loadArchiveSession(archiveDirectory).empty());
+        std::filesystem::remove(archiveDirectory + "/archive-session.json.tmp");
+        signIn(app);
+        assert(app.ui.archiveSignedIn && !loadArchiveSession(archiveDirectory).empty());
+        assert(archiveLoginCalls == 3);
+        for (const auto& file : {"config.json", "app.log"}) {
+            const auto contents = readFile(archiveDirectory + "/" + file);
+            assert(contents.find("fixture-private") == std::string::npos);
+            assert(contents.find("fixture@example.test") == std::string::npos);
+        }
+    }
+    {
+        App app(archiveDirectory); settle(app, video);
+        assert(app.ui.archiveSignedIn && app.ui.archivePassword.empty());
+        // A failed replacement login keeps the previous saved session usable.
+        failArchiveLogin = true; signIn(app);
+        assert(app.ui.archiveSignedIn && !loadArchiveSession(archiveDirectory).empty());
+        failArchiveLogin = false;
+        allowInstalls = true; rejectInstall = false; retainFailedStart = false; progressMode = 0;
+        blockProbe = true; uniqueTasks = false; expectArchiveDownload = true;
+        Entry authenticated; authenticated.titleId = "CUSA98765"; authenticated.name = "Authenticated fixture";
+        authenticated.url = "http://fixture/auth-game.pkg";
+        app.ui.setLibraries(std::vector<Entry>{}, std::vector<Entry>{authenticated});
+        app.ui.library = Library::Available; app.ui.rebuild(); app.ui.screen = Screen::Dashboard;
+        app.ui.handle(Button::Cross); app.ui.handle(Button::Cross); app.tick(0, video);
+        app.ui.screen = Screen::ArchiveAccount; app.ui.archiveIndex = 3; app.ui.handle(Button::Cross);
+        app.tick(0, video);
+        assert(app.ui.archiveSignedIn && !app.ui.archiveBusy && !loadArchiveSession(archiveDirectory).empty());
+        assert(app.ui.archiveNotice.find("Finish or cancel") != std::string::npos);
+        blockProbe = false; settle(app, video);
+        assert(authenticatedTransfers > 0);
+        expectArchiveDownload = false;
+        assert(readFile(archiveDirectory + "/queue.json").find("fixture-private") == std::string::npos);
+        app.ui.screen = Screen::ArchiveAccount; app.ui.archiveIndex = 3; app.ui.handle(Button::Cross);
+        app.tick(0, video);
+        assert(!app.ui.archiveSignedIn && !app.ui.archiveBusy && loadArchiveSession(archiveDirectory).empty());
+    }
+    { App app(archiveDirectory); assert(!app.ui.archiveSignedIn); }
     std::filesystem::remove_all(directory);
     std::puts("Settings persistence and tracked installation progress, failed-task recovery, retry and staging cleanup passed");
     std::puts("Launch handoff/session restart, rating persistence, uninstall confirmation/history and corrupt-record protection passed");
     std::puts("Registration refusal, persistent error/retry, IME deferral and acknowledged-task-error suppression passed");
     std::puts("Bulk rollback/retry, saved collection restart, source setup, managed queue cancellation/retry and durable history passed");
+    std::puts("Archive.org sign-in failure, durable session restart, private storage and local sign-out passed");
 }

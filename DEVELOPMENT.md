@@ -244,7 +244,8 @@ success convention in the pinned SDK's
 [net_http sample](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/v0.5.4/samples/net_http/net_http/main.c).
 It relaxes certificate validation for those public images. Prefix tests exclude
 lookalike hosts, credentials and unrelated paths; catalogs/packages never activate
-the exception, including when pointed at that same host. Redirects remain disabled.
+the exception, including when pointed at that same host. Redirects now use the
+bounded policy below and re-evaluate the exception on each hop.
 
 The artwork worker keeps bounded failure text per key and at most 32 diagnostic
 messages for the main thread to write to app.log. Screenshot successes include
@@ -256,3 +257,121 @@ Capture 96 exercises a real refused local connection rather than a hardcoded err
 Read-only r37 console evidence showed no screenshot cache entries, but no native
 image error had been logged. HTTPS compatibility addresses a likely cause; actual
 PS4 acceptance is required to establish that it resolves this console's failure.
+
+## HTTPS trust and redirect transport
+
+`prepareHttpTrust()` parses the packaged, pinned Mozilla CA bundle before
+`prepareConsole()` changes the filesystem root with libjbc. The cached certificates
+remain available after `/app0` becomes inaccessible. Native HTTP initialization
+registers full CRLF PEM records using `sceHttpsLoadCert` on the same module/context
+as every other HTTP operation. The pointer array, PEM records and strings remain
+alive until context teardown. Initialization failures clean up HTTP, SSL and pool
+resources and allow a later retry. Certificates are never fetched from a server
+or silently accepted when verification fails.
+
+Both native and host clients use the same bounded redirect URL/header policy:
+five hops, HTTP(S) only, no HTTPS downgrade, no URL credentials, and no redirect
+bodies delivered to parsers or download sinks. Relative locations retain escaped
+paths and query strings. Catalog size/cancellation/deadline limits still apply.
+The host checker honors `CURL_CA_BUNDLE` for local TLS fixtures; the console has
+no runtime trust override. `THIRD_PARTY.md` records the bundle pin and license.
+
+`HttpTransferInfo::effectiveUrl` identifies the final response. Only resolved HTTP
+range responses use remote BGFT registration. HTTPS packages reuse the existing
+bounded-memory staging, free-space checks, lease handling and local BGFT path,
+because BGFT has an independent trust store. Original catalog URLs remain queue
+and staging-cache keys. HTTPS probes avoid Range so cache validation sees the full
+length, including when an HTTP probe first redirects to HTTPS.
+
+Native fixtures verify CA registration ABI/lifetime/failure cleanup and redirect
+policy. Local TLS integration tests verify trust/hostname failures and download
+routing without external package servers. These checks and PS4 package validation
+do not prove real-console TLS/cipher or BGFT acceptance. Test the resulting package
+on PS4 11.00 + GoldHEN, including HTTPS catalogs, redirected HTTPS packages, local
+installation, cancellation/retry and the existing direct HTTP path.
+
+### PS4 9.00 follow-up
+
+A user tested r42 on firmware 9.00: artwork appeared, but the same package request
+still failed with `0x8095F00C`. Artwork can use the existing IGDB exception and is
+not evidence that verified package TLS succeeded. Desktop TLS 1.2 handshakes with
+the packaged roots verify the reported host and its CDN, including the supplied
+GoDaddy G2 intermediate/cross-signed chain. This does not reproduce firmware path
+building or prove why the console rejects it.
+
+The native client now requests keepalive when creating each connection. SSPI's
+[initial public native client](https://github.com/Xyhlo/SSPI/blob/4984f2a1fd3a45f83c58c4f4c3dcb1d8b90cd439/app/NativeHttp.cs#L1141)
+documents loss of custom HTTPS trust in the non-keepalive path and uses this mode.
+This is a focused compatibility candidate, not a confirmed diagnosis on this PS4.
+Connections still close through the existing per-request/per-hop RAII ownership.
+The root bundle, certificate verification and redirect policies are unchanged.
+
+The native fixture models that documented trust-loss behavior and fails before
+the connection-mode change. It validates the intended API contract; it does not
+emulate PS4 cryptography. Send failures include only the host and redirect count,
+never signed paths/query strings. The existing error logger also records native
+SSL/verification flags, errno, CA count/load result and connection mode. Diagnostic
+getters run before cleanup; a failed getter cannot replace the request error.
+Unknown-CA failures are described as certificate
+trust failures. The installation-error dialog no longer claims that a package was
+downloaded. Firmware 9.00 retesting is needed before considering the TLS issue
+resolved; investigate chain construction separately if the same request fails.
+
+### GoDaddy G2 compatibility anchor
+
+The r44 firmware 9.00 log identifies `archive.org`, redirect 0, unknown CA
+(`send=0x8095F00C`, `ssl=0x8095F00A`, `verify=0x20`) with `ca=121`, successful
+`ca_load=0` and `keepalive=1`. Keepalive alone did not resolve this console's error.
+The served chain includes the G2 issuing intermediate, a cross-signed G2 root and
+a legacy Class2 root. The packaged Mozilla store contains the self-signed G2 root;
+modern OpenSSL builds a valid alternate path, but this does not prove that older
+PS4 firmware makes the same selection.
+
+The app now preloads the exact GoDaddy-published G2 issuing certificate alongside
+the unchanged Mozilla roots, before the filesystem-root transition. SSPI documents
+this compatibility anchor for the same cross-signed chain. The asset tests pin its
+PEM and DER hashes, verify its CA/signing constraints and its signature against the
+bundled roots, and check package inclusion. `THIRD_PARTY.md` records provenance.
+The firmware can use the issuing CA directly while retaining its leaf certificate
+checks. No server-delivered certificate is added to trust and no verification
+callback is used for catalogs/packages.
+
+This promotes the intermediate to a trust anchor: ancestor-chain checks above it
+are no longer needed. It is a public issuing CA, not restricted to one hostname;
+its root was already trusted. Review/replace this packaged compatibility anchor
+before its May 3, 2031 expiry. A successful console test establishes compatibility
+for that request, not the precise internal firmware chain-selection algorithm.
+
+Hardware result: on the user's firmware 9.00 console, the same package request
+that failed with unknown CA on r44 reached HTTP 401 on r45. A desktop probe follows
+the HTTPS redirect and reproduces the CDN's authorization response; another file
+returns HTTP 500. This confirms the certificate compatibility change for that
+request. Complete package transfer/local installation still needs an accessible
+file host and is not established by these error responses.
+
+### Internet Archive authentication
+
+The user reproduced a successful download only after signing into Archive.org.
+Anonymous full/ranged GETs with installer and browser headers returned HTTP 401.
+The client now uses the official account login endpoint documented by the
+[Internet Archive client](https://github.com/jjjake/internetarchive/blob/master/internetarchive/config.py):
+form-encoded email/password are sent to `https://archive.org/services/xauthn/?op=login`.
+Login redirects are rejected; the reply is bounded and server error text is never
+shown or logged. Only the two login cookies are retained; returned S3 keys are ignored.
+
+The existing background worker owns sign-in. Its result becomes active only after
+the separate session file is saved; failed replacement login preserves the prior
+session. Each download captures a session snapshot and uses it for the header
+probe and full staged download. The existing HTTP adapters attach cookies only
+after checking every hop's HTTPS scheme and exact Archive.org domain boundary.
+HTTP, unrelated hosts and nonstandard ports never receive the credentials.
+Catalog/artwork fetches and remote BGFT registration do not receive the session.
+The existing staging/local BGFT path and public catalog format are unchanged.
+
+The account screen masks password entry, disables IME learning/resume for that
+field, and clears temporary password buffers after submission/cancel. Sessions
+use a separate mode-0600 file, excluded from existing backup/diagnostic exports.
+Sign-out requires the current worker operation to finish and deletes the local
+session. This is local sign-out, not revocation of all Archive.org sessions.
+There is no authentication bypass, automatic retry on rejected credentials,
+new networking dependency, or claim that host download speed is improved.

@@ -306,6 +306,18 @@ void Renderer::draw(Canvas& c, Ui& ui, ArtworkCache& artwork, double time) {
             hints(c, 412, 913, {{Button::Cross, "Change / Select"}, {Button::Circle, "Cancel"}});
             c.text("Left / Right Change", 1100, 913, 23, Muted); break;
         }
+        case Screen::ArchiveAccount: {
+            panel(c, 352, 165, 1216, 740, "Archive.org account");
+            c.text(ui.archiveSignedIn ? "Signed in" : "Not signed in", 412, 300, 27, ui.archiveSignedIn ? Accent : Muted, 1090);
+            c.text("Sign in to download files your account can access.", 412, 345, 24, Muted, 1090);
+            menu(c, ui.archiveRows(), ui.archiveIndex, 390, 422, 1140, 66, 4);
+            c.text(ui.archiveNotice, 412, 712, 23, Accent, 1090);
+            c.text(ui.archiveBusy ? "You can go back while this finishes." : "After signing in, retry the failed download from Downloads.",
+                   412, 770, 22, Muted, 1090);
+            if (ui.archiveBusy) hints(c, 412, 861, {{Button::Circle, "Back"}});
+            else hints(c, 412, 861, {{Button::Cross, "Edit / Select"}, {Button::Circle, "Back"}});
+            break;
+        }
         case Screen::Sources: {
             panel(c, 352, 140, 1216, 800, "Additional catalog sources");
             size_t start = ui.sourceIndex > 8 ? ui.sourceIndex - 7 : 1;
@@ -475,7 +487,7 @@ void Renderer::draw(Canvas& c, Ui& ui, ArtworkCache& artwork, double time) {
         case Screen::InstallError: {
             panel(c, 330, 200, 1260, 680, "Installation failed");
             c.text(ui.failedInstall.name, 380, 347, 33, White, 1160);
-            c.text("Downloading a package does not install the game.", 380, 410, 26, Accent, 1160);
+            c.text("See the error below for details.", 380, 410, 26, Accent, 1160);
             std::string remaining = ui.installError;
             int baseline = 473;
             while (!remaining.empty() && baseline <= 737) {
@@ -516,7 +528,7 @@ void Renderer::draw(Canvas& c, Ui& ui, ArtworkCache& artwork, double time) {
         case Screen::Keyboard:
             panel(c, 300, 330, 1320, 400, keyboardTitle(ui.editKind));
             c.rounded(340, 466, 1240, 88, 10, 0x061c32, 255);
-            c.text(ui.keyboardText + "|", 367, 522, 28, White, 1185);
+            c.text(ui.keyboardDisplayText() + "|", 367, 522, 28, White, 1185);
 #ifdef PSGI_HOST
             c.text("Type with your keyboard. Enter saves; Escape cancels.", 350, 671, 24, Accent);
 #else

@@ -14,9 +14,9 @@ enum class Button { Up, Down, Left, Right, Cross, Circle, Square, Triangle, Opti
 // Selectable lists wrap at both ends; first supports lists with reserved rows.
 void moveMenuSelection(Button button, size_t& selection, size_t count, size_t first = 0);
 enum class Screen { Splash, Dashboard, Options, Settings, Sources, Storage, Details, Actions, Rating, LocalInfo, PickCategory, PickTags, DiscardLocal, Collections, ConfirmDeleteCollection, About, ConfirmExit, ConfirmInstall, InstallError, ConfirmUninstall, Discard, Keyboard,
-    BulkMenu, ConfirmBulkClear, SavedCollections, EditSaved, ConfirmDeleteSaved, Queue, QueueDetails, ConfirmCancelQueue, Backups, BackupFiles, ConfirmRestore, SourceSetup, Packages, Cleanup, ConfirmCleanup, Diagnostics, Search, ConfirmClearSearches, JumpLetter, ServerProfiles, ConfirmDeleteProfile, Screenshots, Videos };
+    BulkMenu, ConfirmBulkClear, SavedCollections, EditSaved, ConfirmDeleteSaved, Queue, QueueDetails, ConfirmCancelQueue, Backups, BackupFiles, ConfirmRestore, SourceSetup, Packages, Cleanup, ConfirmCleanup, Diagnostics, Search, ConfirmClearSearches, JumpLetter, ServerProfiles, ConfirmDeleteProfile, Screenshots, Videos, ArchiveAccount };
 enum class CommandType { Refresh, Save, Test, Storage, SetStorage, ClearArtwork, RefreshArtwork, Install, Uninstall, Rate, SaveLocalInfo, CreateCollection, RenameCollection, DeleteCollection, Launch, Keyboard, Quit,
-    BulkAssign, SaveSavedCollection, DeleteSavedCollection, ScanBackups, ExportBackup, RestoreBackup, TestSource, RetryQueue, CancelQueue, ClearQueue, RefreshQueue, ScanUsage, CleanStaging, ExportDiagnostics, SaveSession, RemoveQueue, OpenMedia };
+    BulkAssign, SaveSavedCollection, DeleteSavedCollection, ScanBackups, ExportBackup, RestoreBackup, TestSource, RetryQueue, CancelQueue, ClearQueue, RefreshQueue, ScanUsage, CleanStaging, ExportDiagnostics, SaveSession, RemoveQueue, OpenMedia, ArchiveSignIn, ArchiveSignOut };
 struct Command {
     CommandType type; Entry entry; size_t source = 0; std::string text;
     std::optional<Settings> configuration = {}; std::optional<LocalInfo> personal = {}; std::string previous = {};
@@ -24,11 +24,12 @@ struct Command {
     std::set<std::string> titles = {};
     std::optional<SavedCollection> collection = {};
     std::optional<Source> candidate = {};
+    std::string archiveEmail = {}, archivePassword = {};
 };
 struct DetailRow { std::string key, value; unsigned action = 0; };
 struct SidebarRow { std::string name, genre; unsigned kind = 0; };
 struct TileRow { std::string group; std::vector<size_t> items; };
-enum class EditKind { SourceUrl, SourceCategory, Search, GameCategory, GameTag, GameDescription, CreateCategory, CreateTag, RenameCategory, RenameTag, SavedName, SavedQuery, SetupUrl, ProfileName, RenameProfile };
+enum class EditKind { SourceUrl, SourceCategory, Search, GameCategory, GameTag, GameDescription, CreateCategory, CreateTag, RenameCategory, RenameTag, SavedName, SavedQuery, SetupUrl, ProfileName, RenameProfile, ArchiveEmail, ArchivePassword };
 size_t keyboardMaximum(EditKind kind);
 std::string keyboardTitle(EditKind kind);
 
@@ -73,6 +74,9 @@ public:
     size_t storageIndex = 0;
     std::string status = "Loading your library...", query, keyboardText;
     std::string settingsNotice;
+    std::string archiveEmail, archivePassword, archiveNotice;
+    bool archiveSignedIn = false, archiveBusy = false;
+    size_t archiveIndex = 0;
     std::vector<std::string> recentSearches;
     size_t searchIndex = 0, jumpIndex = 0, profileIndex = 0;
     Screen jumpReturn = Screen::Options, profileReturn = Screen::Settings;
@@ -128,6 +132,8 @@ public:
     bool take(Command& command);
     std::vector<std::string> options() const;
     std::vector<std::string> settingRows() const;
+    std::vector<std::string> archiveRows() const;
+    std::string keyboardDisplayText() const;
     std::vector<std::string> actionRows() const;
     size_t shownGames() const { return uniqueShown; }
     std::vector<std::string> termChoices(bool tags, bool draft = false) const;

@@ -27,7 +27,7 @@ TITLE_ID := PGIN00001
 CONTENT_ID := IV0000-$(TITLE_ID)_00-PS4GAMEINSTALLER
 CROSSFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -D_POSIX_C_SOURCE=200809L \
     -isysroot $(SDK) -isystem $(SDK)/include -Isrc -Ithird_party/cjson -Ithird_party/stb -Ibuild/generated -O2 -g -Wall -Wextra -MMD -MP
-COMMON := catalog metadata settings library sfo installed storage userdata package queue backup source maintenance ui ui_features ui_browsing ui_details browser
+COMMON := catalog metadata settings archive_auth library sfo installed storage userdata package queue backup source maintenance ui ui_features ui_browsing ui_details browser
 UI_SOURCES := controller canvas artwork render app download demo video main
 CONSOLE := $(UI_SOURCES) http install console lifecycle storage_native filesystem_native
 PS4_OBJECTS := $(addprefix build/ps4/,$(addsuffix .o,$(COMMON) $(CONSOLE))) build/ps4/cJSON.o
@@ -80,8 +80,8 @@ build/host/cJSON.o: third_party/cjson/cJSON.c
 	gcc -O1 -g -c $< -o $@
 build/host/catalog-test: tests/catalog_test.cpp src/catalog.cpp src/metadata.cpp build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) tests/catalog_test.cpp src/catalog.cpp src/metadata.cpp build/host/cJSON.o -o $@
-build/host/catalog-check: src/check.cpp src/catalog.cpp src/metadata.cpp src/settings.cpp src/http.cpp build/host/cJSON.o $(HEADERS)
-	g++ $(HOSTFLAGS) src/check.cpp src/catalog.cpp src/metadata.cpp src/settings.cpp src/http.cpp build/host/cJSON.o -lcurl -o $@
+build/host/catalog-check: src/check.cpp src/catalog.cpp src/metadata.cpp src/settings.cpp src/archive_auth.cpp src/http.cpp build/host/cJSON.o $(HEADERS)
+	g++ $(HOSTFLAGS) $(filter %.cpp %.o,$^) -lcurl -o $@
 
 build/generated/revision.hpp:
 	@mkdir -p $(@D)
@@ -123,7 +123,7 @@ build/host/thread-native-test: tests/thread_native_test.cpp $(HEADERS)
 	g++ $(HOSTFLAGS) -UPSGI_HOST -idirafter $(SDK)/include $(filter %.cpp,$^) -o $@
 build/host/ui-test: tests/ui_test.cpp $(HOST_COMMON) build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) $(filter %.cpp %.o,$^) -o $@
-build/host/artwork-test: tests/artwork_test.cpp tests/sfo_fixture.hpp tests/fixtures/screenshot.jpg src/artwork.cpp src/canvas.cpp src/catalog.cpp src/metadata.cpp src/http.cpp src/settings.cpp src/installed.cpp src/sfo.cpp build/host/cJSON.o $(HEADERS)
+build/host/artwork-test: tests/artwork_test.cpp tests/sfo_fixture.hpp tests/fixtures/screenshot.jpg src/artwork.cpp src/canvas.cpp src/catalog.cpp src/metadata.cpp src/http.cpp src/settings.cpp src/archive_auth.cpp src/installed.cpp src/sfo.cpp build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) -Wno-unused-function -fsanitize=address,undefined -fno-omit-frame-pointer $$(pkg-config --cflags freetype2) $(filter %.cpp %.o,$^) -lcurl $$(pkg-config --libs freetype2) -o $@
 build/host/render-animation-test: tests/render_animation_test.cpp $(HOST_COMMON) $(addprefix src/,$(addsuffix .cpp,canvas artwork render http)) build/host/cJSON.o build/generated/revision.hpp $(HEADERS)
 	g++ $(HOSTFLAGS) -Wno-unused-function $$(pkg-config --cflags freetype2) $(filter %.cpp %.o,$^) -lcurl $$(pkg-config --libs freetype2) -o $@
@@ -131,9 +131,14 @@ build/host/startup-test: tests/startup_fixtures.cpp $(HOST_COMMON) $(addprefix s
 	g++ $(HOSTFLAGS) -Wno-unused-function $$(pkg-config --cflags freetype2) $(filter %.cpp %.o,$^) -lcurl $$(pkg-config --libs freetype2) -o $@
 build/host/lifecycle-test: tests/lifecycle_test.cpp src/lifecycle.cpp $(HEADERS)
 	g++ $(HOSTFLAGS) -I/opt/libjbc -idirafter $(SDK)/include $(filter %.cpp,$^) -o $@
+build/host/https-trust-test: tests/https_trust_test.cpp src/https_trust.hpp assets/cacert.pem
+	@mkdir -p $(@D)
+	g++ $(HOSTFLAGS) $< -o $@
+build/host/archive-auth-test: tests/archive_auth_test.cpp src/archive_auth.cpp src/settings.cpp src/catalog.cpp src/metadata.cpp build/host/cJSON.o $(HEADERS)
+	g++ $(HOSTFLAGS) $(filter %.cpp %.o,$^) -o $@
 build/host/http-native.o: src/http.cpp $(HEADERS)
-	g++ $(HOSTFLAGS) -Wframe-larger-than=8192 -UPSGI_HOST -idirafter $(SDK)/include -c $< -o $@
-build/host/http-native-test: tests/http_native_test.cpp build/host/http-native.o src/catalog.cpp src/metadata.cpp build/host/cJSON.o $(HEADERS)
+	g++ $(HOSTFLAGS) -DPSGI_CA_BUNDLE_PATH='"build/host/test-cacert.pem"' -Wframe-larger-than=8192 -UPSGI_HOST -idirafter $(SDK)/include -c $< -o $@
+build/host/http-native-test: tests/http_native_test.cpp build/host/http-native.o src/catalog.cpp src/metadata.cpp src/settings.cpp src/archive_auth.cpp build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) -UPSGI_HOST -idirafter $(SDK)/include $(filter %.cpp %.o,$^) -o $@
 build/host/launch-native-test: tests/launch_native_test.cpp src/console.cpp src/installed.cpp src/sfo.cpp src/catalog.cpp src/metadata.cpp build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) -idirafter $(SDK)/include $(filter %.cpp %.o,$^) -o $@
@@ -143,13 +148,15 @@ build/host/storage-native-test: tests/storage_native_test.cpp src/storage_native
 	g++ $(HOSTFLAGS) -idirafter $(SDK)/include $(filter %.cpp,$^) -o $@
 build/host/install-native-test: tests/install_native_test.cpp tests/package_fixture.hpp src/install.cpp src/library.cpp src/package.cpp src/sfo.cpp src/catalog.cpp src/metadata.cpp build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) -idirafter $(SDK)/include $(filter %.cpp %.o,$^) -o $@
-build/host/download-runner: tests/download_runner.cpp src/download.cpp src/http.cpp src/catalog.cpp src/metadata.cpp src/settings.cpp build/host/cJSON.o $(HEADERS)
+build/host/download-runner: tests/download_runner.cpp src/download.cpp src/http.cpp src/catalog.cpp src/metadata.cpp src/settings.cpp src/archive_auth.cpp build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) $(filter %.cpp %.o,$^) -lcurl -o $@
 build/host/app-test: tests/app_test.cpp $(HOST_COMMON) $(addprefix src/,$(addsuffix .cpp,app artwork download)) build/host/cJSON.o build/generated/revision.hpp $(HEADERS)
 	g++ $(HOSTFLAGS) -Wno-unused-function $$(pkg-config --cflags freetype2) $(filter %.cpp %.o,$^) -o $@
 build/host/controller-test: tests/controller_test.cpp src/controller.cpp src/video.cpp $(HOST_COMMON) build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) -idirafter $(SDK)/include $$(pkg-config --cflags freetype2 sdl2) $(filter %.cpp %.o,$^) $$(pkg-config --libs sdl2) -o $@
-test: assets build/host/json-allocator-test build/host/browser-native-test build/host/metadata-test build/host/catalog-test build/host/catalog-check build/host/model-test build/host/userdata-test build/host/features-test build/host/maintenance-test build/host/browsing-test build/host/filesystem-native-test build/host/thread-native-test build/host/ui-test build/host/artwork-test build/host/render-animation-test build/host/startup-test build/host/lifecycle-test build/host/http-native-test build/host/launch-native-test build/host/uninstall-native-test build/host/storage-native-test build/host/install-native-test build/host/download-runner build/host/app-test build/host/controller-test
+test: assets build/host/archive-auth-test build/host/https-trust-test build/host/json-allocator-test build/host/browser-native-test build/host/metadata-test build/host/catalog-test build/host/catalog-check build/host/model-test build/host/userdata-test build/host/features-test build/host/maintenance-test build/host/browsing-test build/host/filesystem-native-test build/host/thread-native-test build/host/ui-test build/host/artwork-test build/host/render-animation-test build/host/startup-test build/host/lifecycle-test build/host/http-native-test build/host/launch-native-test build/host/uninstall-native-test build/host/storage-native-test build/host/install-native-test build/host/download-runner build/host/app-test build/host/controller-test
+	./build/host/archive-auth-test
+	./build/host/https-trust-test
 	./build/host/json-allocator-test
 	./build/host/browser-native-test
 	./build/host/metadata-test

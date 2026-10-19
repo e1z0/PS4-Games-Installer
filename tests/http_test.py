@@ -1,6 +1,7 @@
 """Exercise the real fetch/parser path without contacting a package server."""
 import http.server
 import json
+from collections import Counter
 from pathlib import Path
 import subprocess
 import sys
@@ -10,9 +11,23 @@ import threading
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/redirect":
-            self.send_response(302)
-            self.send_header("Location", "/catalog")
+        self.server.calls[self.path] += 1
+        redirects = {
+            "/redirect": (302, "/catalog"),
+            "/redirect-permanent": (301, "catalog"),
+            "/redirect-see-other": (303, f"//127.0.0.1:{self.server.server_port}/catalog"),
+            "/redirect-temporary": (307, "/catalog"),
+            "/redirect-preserve": (308, "/catalog"),
+            "/redirect-loop": (302, "/redirect-loop"),
+            "/redirect-invalid": (302, "file:///catalog"),
+            "/redirect-missing-location": (302, None),
+            "/redirect-missing": (302, "/missing"),
+        }
+        if self.path in redirects:
+            status, location = redirects[self.path]
+            self.send_response(status)
+            if location is not None:
+                self.send_header("Location", location)
             self.end_headers()
             return
         if self.path == "/missing":
@@ -42,6 +57,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main():
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.calls = Counter()
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -50,7 +66,15 @@ def main():
             for endpoint, expected, text in [
                 ("catalog", 0, "1 unique packages"),
                 ("empty", 0, "0 unique packages"),
-                ("redirect", 1, "HTTP 302"),
+                ("redirect", 0, "1 unique packages"),
+                ("redirect-permanent", 0, "1 unique packages"),
+                ("redirect-see-other", 0, "1 unique packages"),
+                ("redirect-temporary", 0, "1 unique packages"),
+                ("redirect-preserve", 0, "1 unique packages"),
+                ("redirect-loop", 1, "redirect"),
+                ("redirect-invalid", 1, "redirect"),
+                ("redirect-missing-location", 1, "Location"),
+                ("redirect-missing", 1, "HTTP 404"),
                 ("missing", 1, "HTTP 404"),
                 ("malformed", 1, "Expected a JSON object"),
                 ("large", 1, "Catalog download failed"),
@@ -60,7 +84,8 @@ def main():
                 }}))
                 result = subprocess.run([sys.argv[1], str(config)], capture_output=True, text=True, timeout=15)
                 assert result.returncode == expected, (endpoint, result.stdout, result.stderr)
-                assert text in result.stdout + result.stderr, (endpoint, result.stdout, result.stderr)
+                assert text.lower() in (result.stdout + result.stderr).lower(), (endpoint, result.stdout, result.stderr)
+            assert 1 < server.calls["/redirect-loop"] <= 6, server.calls
         print("HTTP integration tests passed")
     finally:
         server.shutdown()

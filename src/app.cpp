@@ -15,7 +15,7 @@
 
 namespace psgi {
 namespace {
-enum class ResultKind { Local, Remote, Test, Storage, Install, Uninstall, Poll, Cancel, SourceTest, Maintenance };
+enum class ResultKind { Local, Remote, Test, Storage, Install, Uninstall, Poll, Cancel, SourceTest, Maintenance, ArchiveLogin };
 struct Result {
     ResultKind kind = ResultKind::Test;
     std::optional<std::vector<Entry>> local, remote;
@@ -28,6 +28,7 @@ struct Result {
     std::optional<SourceReport> sourceReport;
     bool backgroundTransfer = false;
     std::optional<StorageUsage> usage;
+    std::optional<ArchiveSession> archiveSession;
 };
 struct TransferUpdate { std::string url; QueueStage stage; uint64_t bytes = 0, total = 0; };
 constexpr size_t CacheLimit = 64 * 1024 * 1024;
@@ -90,6 +91,10 @@ App::App(const std::string& data, bool preview)
     catch (const std::exception& e) { ui.status = std::string("Settings: ") + e.what(); }
     if(!demo)log(std::string("Starting PS4 Games Installer ")+PSGI_VERSION);
     saved = ui.settings; ui.draft = saved;
+    if (!demo) {
+        try { archiveSession = loadArchiveSession(directory); ui.archiveSignedIn = !archiveSession.empty(); }
+        catch (const std::exception& e) { ui.archiveNotice = e.what(); }
+    }
     try { ui.player = loadPlayerData(directory); }
     catch (const std::exception& e) { playerWritable = false; log(std::string("Local records kept unchanged: ") + e.what()); }
     try { resume = loadViewState(directory); ui.recentSearches=resume->recentSearches; }
@@ -233,7 +238,8 @@ void App::startNextDownload(int user) {
     try { persistQueue(); }
     catch (const std::exception& e) { found->stage = QueueStage::Failed; found->message = e.what(); ui.status = e.what(); syncQueued(); return; }
     activeDownloadUrl = entry.url;
-    worker->start([this, entry, user] {
+    const auto session = archiveSession;
+    worker->start([this, entry, user, session] {
         Result r; r.kind = ResultKind::Install; r.entry = entry;
         QueueStage stage = QueueStage::Checking; uint64_t bytes = 0, total = 0;
         try {
@@ -247,7 +253,7 @@ void App::startNextDownload(int user) {
             r.backgroundTransfer = phase == InstallPhase::RegisteringRemote;
             stage = phase == InstallPhase::Checking ? QueueStage::Checking : phase == InstallPhase::Downloading ? QueueStage::Downloading : QueueStage::Registering;
             worker->reportTransfer({entry.url, stage, bytes, total});
-        }); } catch (const SubmissionFailure& e) { r.message = e.what(); r.task = e.retainedTask; }
+        }, session); } catch (const SubmissionFailure& e) { r.message = e.what(); r.task = e.retainedTask; }
         catch (const std::exception& e) { r.message = e.what(); }
         return r;
     });
@@ -322,6 +328,12 @@ void App::tick(double elapsed, Video& video) {
         if (result->storage) { ui.storage = *result->storage; ui.storageChecked = true; }
         if (result->usage) ui.usage = *result->usage;
         if (result->kind == ResultKind::Maintenance) { cleaningStaging = false; ui.featureNotice = result->message; }
+        if (result->kind == ResultKind::ArchiveLogin) {
+            ui.archiveBusy = false;
+            if (result->archiveSession) archiveSession = std::move(*result->archiveSession);
+            ui.archiveSignedIn = !archiveSession.empty();
+            ui.archiveNotice = result->message;
+        }
         if (result->sourceReport) {
             ui.sourceTesting = false;
             if (result->sourceReport->source.url == ui.setupSource.url && result->sourceReport->source.category == ui.setupSource.category) ui.sourceReport = *result->sourceReport;
@@ -449,6 +461,34 @@ void App::tick(double elapsed, Video& video) {
                 case CommandType::Keyboard:
                     try { video.startKeyboard(ui); }
                     catch (...) { ui.finishEdit({}); throw; }
+                    break;
+                case CommandType::ArchiveSignIn: {
+                    if (demo) throw std::runtime_error("Sign in on your PS4; desktop preview does not use accounts");
+                    if (worker->busy()) throw std::runtime_error("Finish or cancel the current operation, then sign in");
+                    const bool started = worker->start([this, email = std::move(command.archiveEmail), password = std::move(command.archivePassword)]() mutable {
+                        Result r; r.kind = ResultKind::ArchiveLogin;
+                        try {
+                            auto session = archiveLogin(email, password, &worker->cancelled);
+                            std::fill(password.begin(), password.end(), '\0'); password.clear();
+                            if (worker->cancelled) throw std::runtime_error("Archive.org sign-in cancelled");
+                            saveArchiveSession(directory, session);
+                            r.archiveSession = std::move(session);
+                            r.message = "Signed into Archive.org. Retry the failed download from Downloads.";
+                        } catch (const std::exception& e) { r.message = e.what(); }
+                        std::fill(password.begin(), password.end(), '\0'); password.clear();
+                        return r;
+                    });
+                    if (!started) throw std::runtime_error("Finish or cancel the current operation, then sign in");
+                    ui.archiveBusy = true; ui.loading = true;
+                    ui.archiveNotice = ui.status = "Signing into Archive.org...";
+                    break;
+                }
+                case CommandType::ArchiveSignOut:
+                    if (worker->busy()) throw std::runtime_error("Finish or cancel the current operation, then sign out");
+                    if (!demo) clearArchiveSession(directory);
+                    archiveSession = {}; ui.archiveSignedIn = false; ui.archiveBusy = false;
+                    ui.archiveEmail.clear(); ui.archivePassword.clear();
+                    ui.archiveNotice = ui.status = "Signed out of Archive.org on this PS4";
                     break;
                 case CommandType::SaveSession:
                     resume.reset();
@@ -759,7 +799,13 @@ void App::tick(double elapsed, Video& video) {
                     break;
                 }
             }
-        } catch (const std::exception& e) { ui.featureNotice = ui.status = e.what(); log(ui.status); }
+        } catch (const std::exception& e) {
+            if (command.type == CommandType::ArchiveSignIn || command.type == CommandType::ArchiveSignOut) {
+                ui.archiveBusy = false; ui.archiveNotice = e.what();
+            }
+            ui.featureNotice = ui.status = e.what(); log(ui.status);
+        }
+        std::fill(command.archivePassword.begin(), command.archivePassword.end(), '\0'); command.archivePassword.clear();
     }
     // Keep installation failures visible even if a routine library scan finishes.
     // Wait for the user to leave IME/settings rather than interrupting an edit.

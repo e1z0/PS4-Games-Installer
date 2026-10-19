@@ -1,6 +1,7 @@
 #pragma once
 #include "artwork.hpp"
 #include "ui.hpp"
+#include "archive_auth.hpp"
 #include <functional>
 #include <memory>
 
@@ -12,6 +13,7 @@ class App {
     std::unique_ptr<Worker> monitor;
     std::string directory;
     Settings saved;
+    ArchiveSession archiveSession;
     std::optional<ViewState> resume;
     bool playerWritable = true;
     bool queueWritable = true;

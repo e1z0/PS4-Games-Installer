@@ -49,9 +49,28 @@ the generated library URL in the steps below.
 3. Enter your server's **Games JSON URL**, for example `http://192.168.1.10:3000/games`.
 4. Choose **Test connection**, then **Save settings**.
 
-Use the direct JSON address supplied by your catalog server. The server and its
+Use the HTTP or HTTPS JSON address supplied by your catalog server. The server and its
 package/artwork URLs must be reachable from the PS4. Settings also lets you add
 other catalog sources, choose a layout, and turn background bubbles on or off.
+
+HTTPS catalogs and packages use bundled trusted root certificates. Up to five
+redirects are supported; redirects from HTTPS to HTTP are rejected. HTTPS packages
+download to internal storage before installation, so keep the app open and allow
+space for the package copy plus installation. Other hosts requiring authentication
+still need a directly accessible package URL.
+
+For Internet Archive files that download only after signing in, open **Options >
+Settings > Archive.org account**, enter your email and password, then choose
+**Sign in**. Return to **Options > Downloads**, select the failed package and retry.
+Your account must already have access to that file; signing in does not grant new
+permissions or increase the host's download speed.
+
+The password is masked and is not saved. The login session is saved privately on
+the console in `/data/PS4-Game-Installer/archive-session.json`, outside the catalog,
+settings, queue, backups and diagnostics. Requests send it only over verified
+HTTPS to Archive.org and its subdomains. **Sign out** removes that local session;
+sign in again if Archive.org expires it. Privileged console software can still
+read local files, so do not share this session file.
 
 ## Controls
 

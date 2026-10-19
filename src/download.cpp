@@ -34,20 +34,33 @@ void removeStagedPackage(const std::string& directory, const std::string& url) {
 int installPackage(const Entry& entry, int userId, const std::string& directory,
                    const std::atomic<bool>* cancelled, const DownloadProgress& progress,
                    const std::function<void(const std::string&)>& note,
-                   const std::function<void(InstallPhase)>& phase) {
+                   const std::function<void(InstallPhase)>& phase,
+                   const ArchiveSession& session) {
     if (phase) phase(InstallPhase::Checking);
-    if (note) note("Probing package header and HTTP Range support");
+    if (note) note("Checking package header and download support");
     std::string magic;
-    const auto probe = httpTransfer(entry.url, [&](const void* data, size_t count, uint64_t) {
-        magic.append(static_cast<const char*>(data), std::min(count, size_t(4) - magic.size()));
-        return magic.size() < 4;
-    }, true, cancelled);
-    if (!packageMagic(magic)) throw std::runtime_error("Package URL did not return a PS4 PKG file");
-    if (cancelled && *cancelled) throw std::runtime_error("Download cancelled");
-    if (probe.status == 206 && probe.length == 4) {
+    const auto probeHeader = [&](const std::string& url, bool range) {
+        magic.clear();
+        auto info = httpTransferAuthenticated(url, [&](const void* data, size_t count, uint64_t) {
+            magic.append(static_cast<const char*>(data), std::min(count, size_t(4) - magic.size()));
+            return magic.size() < 4;
+        }, range, session, cancelled);
+        if (!packageMagic(magic)) throw std::runtime_error("Package URL did not return a PS4 PKG file");
+        if (cancelled && *cancelled) throw std::runtime_error("Download cancelled");
+        return info;
+    };
+    // BGFT has its own firmware trust store. Keep HTTPS in our verified HTTP
+    // client and obtain the full length so completed staging files can be reused.
+    const bool range = entry.url.compare(0, 8, "https://") != 0;
+    auto probe = probeHeader(entry.url, range);
+    if (range && probe.effectiveUrl.compare(0, 8, "https://") == 0)
+        probe = probeHeader(probe.effectiveUrl, false);
+    if (probe.effectiveUrl.compare(0, 7, "http://") == 0 && probe.status == 206 && probe.length == 4) {
         if (phase) phase(InstallPhase::RegisteringRemote);
         if (note) note("Range supported; registering remote package with BGFT");
-        return queueInstall(entry, userId);
+        auto resolved = entry;
+        resolved.url = probe.effectiveUrl;
+        return queueInstall(resolved, userId);
     }
     if (note) note("Downloading package to internal storage before installation");
 
@@ -68,12 +81,12 @@ int installPackage(const Entry& entry, int userId, const std::string& directory,
         try {
             magic.clear();
             const uint64_t available = freeSpace(directory), reserve = 64 * 1024 * 1024;
-            httpTransfer(entry.url, [&](const void* data, size_t count, uint64_t total) {
+            httpTransferAuthenticated(probe.effectiveUrl, [&](const void* data, size_t count, uint64_t total) {
                 if (!received) {
                     if (!total) throw std::runtime_error("Package server must send Content-Length for a direct download");
                     if (!available) throw std::runtime_error("Cannot read internal free space for package staging");
                     if (available < reserve || total > available - reserve)
-                        throw std::runtime_error("Not enough internal space to stage this package. Enable HTTP Range support on the server to install without staging.");
+                        throw std::runtime_error("Not enough internal space to stage this package. Free internal storage and retry.");
                     expected = total;
                 }
                 if (count > expected - received) throw std::runtime_error("Package exceeds its advertised length");
@@ -82,7 +95,7 @@ int installPackage(const Entry& entry, int userId, const std::string& directory,
                 if (std::fwrite(data, 1, count, file) != count) throw std::runtime_error("Cannot write package; check internal free space");
                 received += count; progress(received, expected);
                 return true;
-            }, false, cancelled);
+            }, false, session, cancelled);
             if (!expected || received != expected || !packageMagic(magic)) throw std::runtime_error("Incomplete package download; retry installation");
             if (std::fflush(file) || fsync(fileno(file))) throw std::runtime_error("Cannot flush downloaded package");
             const int closed = std::fclose(file); file = nullptr;

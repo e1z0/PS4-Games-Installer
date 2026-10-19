@@ -4,6 +4,7 @@
 #include <SDL2/SDL.h>
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 
 using namespace psgi;
 
@@ -141,6 +142,17 @@ void sdlController() {
     assert(SDL_PushEvent(&done) == 1); assert(video.input(ui).empty());
     assert(ui.screen == Screen::Settings && video.input(ui).empty());
     axis(0, 0); assert(video.input(ui).empty());
+    ui.screen = Screen::Keyboard; ui.keyboardReturn = Screen::ArchiveAccount;
+    ui.editKind = EditKind::ArchivePassword; ui.keyboardText.clear(); video.startKeyboard(ui);
+    SDL_Event text{}; text.type = SDL_TEXTINPUT; std::strcpy(text.text.text, "preview-secret");
+    assert(SDL_PushEvent(&text) == 1); assert(video.input(ui).empty());
+    assert(ui.keyboardText == "preview-secret" && ui.keyboardDisplayText() == "**************");
+    assert(SDL_PushEvent(&done) == 1); assert(video.input(ui).empty());
+    assert(ui.screen == Screen::ArchiveAccount && ui.archivePassword == "preview-secret" && ui.keyboardText.empty());
+    ui.screen = Screen::Keyboard; ui.keyboardText = "cancel-this"; video.startKeyboard(ui);
+    done.key.keysym.sym = SDLK_ESCAPE;
+    assert(SDL_PushEvent(&done) == 1); assert(video.input(ui).empty());
+    assert(ui.archivePassword.empty() && ui.keyboardText.empty() && ui.screen == Screen::ArchiveAccount);
     axis(26000, 0); expect(Button::Right);
     assert(SDL_JoystickDetachVirtual(index) == 0); assert(video.input(ui).empty());
     SDL_JoystickClose(joystick);

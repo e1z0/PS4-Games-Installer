@@ -1,5 +1,37 @@
 # Work tracker
 
+## Internet Archive authenticated downloads
+
+- [x] Confirm the same file downloads when the user signs into Archive.org.
+- [x] Reuse the verified HTTP/staging path with a private, host-scoped session.
+- [x] Add masked account sign-in/sign-out without changing the public catalog.
+- [x] Validate authentication, redirects, storage, UI and r46 package build.
+- [ ] Verify account sign-in and complete installation on the user's PS4 9.00.
+
+## GoDaddy G2 chain compatibility
+
+- [x] Retrieve r44 logs showing the initial host/unknown CA with successful CA loading.
+- [x] Load only the pinned CA-published G2 intermediate alongside existing roots.
+- [x] Validate certificate pins/signature, native prewarming and r45 packaging.
+- [x] Confirm package HTTPS on firmware 9.00: r45 reaches HTTP responses; file hosts return 401/500.
+
+## PS4 9.00 HTTPS follow-up
+
+- [x] Record the r42 console failure and distinguish artwork from package TLS.
+- [x] Preserve custom trust through the documented keepalive connection mode.
+- [x] Correct the misleading failure dialog and add host/redirect/TLS diagnostics.
+- [x] Validate focused native/host regressions, error-screen capture and r44 package.
+- [x] Retest on firmware 9.00: r44 still failed trust; the r45 compatibility anchor passes TLS.
+
+## HTTPS compatibility
+
+- [x] Reproduce redirect and trust failures with local package fixtures.
+- [x] Package pinned CA roots and load them before native HTTPS requests.
+- [x] Follow bounded redirects and keep TLS verification enabled for packages/catalogs.
+- [x] Reuse staging/local installation for HTTPS; retain direct HTTP BGFT handling.
+- [x] Complete host/native regressions and compile/validate the r42 PS4 package.
+- [ ] Verify HTTPS catalogs and redirected HTTPS installation on PS4 11.00 + GoldHEN.
+
 ## r40 release preparation
 
 - [x] Write concise temporary realease_notes.md for the GitHub release page.
