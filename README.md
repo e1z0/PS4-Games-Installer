@@ -11,6 +11,21 @@ Created by **e1z0 — (c) 2026 Vintage2000.org**.
 [Project](https://github.com/e1z0/PS4-Games-Installer) ·
 [Releases](https://github.com/e1z0/PS4-Games-Installer/releases)
 
+## Setup video
+
+A beginner guide to setting up the Docker Compose library server on Ubuntu,
+installing the app through GoldHEN, and connecting your PS4. English narration,
+captions and chapters; **15 minutes 48 seconds, 1080p**. GoldHEN must already work.
+
+[![Watch the PS4 Games Installer setup tutorial](docs/video/media/setup-preview.jpg)](https://raw.githubusercontent.com/e1z0/PS4-Games-Installer/main/docs/video/media/PS4-Games-Installer-Setup.mp4)
+
+**Companion notes:** [Read the setup commands](docs/video/commands.txt) ·
+[Download notes, transcript and captions](docs/video/media/PS4-Games-Installer-Setup-Companion.zip?raw=true)
+
+Click the preview to open or download the full video. Computer steps were recorded
+for this guide; PS4 sections use labeled existing console pictures and desktop
+previews. USB copying and GoldHEN installation are explained rather than filmed.
+
 ## Screenshots
 
 PS4 captures. Click a picture to open it at full size.

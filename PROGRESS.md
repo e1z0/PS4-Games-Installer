@@ -2,6 +2,10 @@
 
 ## Beginner setup movie — 2026-10-19
 
+- Added a consumer README video preview, linking the full reviewed MP4 and
+  companion notes directly below it. Public assets are in docs/video/media/;
+  publication is limited to tutorial documentation/media, leaving unrelated
+  application commits local. Public link verification is pending.
 - Completed an English Ubuntu/Linux tutorial with narration, captions, chapters
   and copyable consumer commands. Application sources and revision r48 are unchanged.
 - Recorded genuine Bash/Chromium activity for the official Compose example in a

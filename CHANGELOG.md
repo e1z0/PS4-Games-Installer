@@ -2,6 +2,8 @@
 
 ## Beginner setup video — 2026-10-19
 
+- Add a visible README video preview with companion commands and a downloadable
+  notes pack directly underneath; include the reviewed media in the repository.
 - Create a 15:48 English Ubuntu setup movie with real Compose/browser recordings,
   desktop settings captures, narration, captions, chapters and companion commands.
 - Clearly label existing PS4 photographs and desktop previews; USB/GoldHEN

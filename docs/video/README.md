@@ -1,6 +1,8 @@
 # Beginner setup video production
 
-The exported movie and companion material belong in ignored `dist/tutorial/`.
+Working exports belong in ignored `dist/tutorial/`. The reviewed public movie,
+companion ZIP and README preview are also stored in `docs/video/media/` so the
+consumer README links work on GitHub without a separate hosting account.
 Working recordings, tools, voice model and temporary renders belong in ignored
 `build/setup-video/`. Application sources and the package revision are unchanged.
 
@@ -96,5 +98,6 @@ docker compose -p ps4-setup-video down
 
 Inspect rendered terminal/settings/console frames, caption placement, chapter
 boundaries, stream metadata and complete media decoding. Keep the source labels
-and footage limits visible. The export is a local deliverable; uploading it to
-YouTube, GitHub or another external service requires a separate user request.
+and footage limits visible. The user requested publication of the reviewed movie
+and companion notes through the project README. Other external publication, such
+as uploading to YouTube, requires a separate user request.
