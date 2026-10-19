@@ -98,6 +98,9 @@ void capture(App& app, Renderer& renderer, Canvas& canvas) {
     ui.screen = Screen::Queue; ui.queueIndex = 1; shot("38-download-queue");
     ui.queueIndex = 3; ui.screen = Screen::QueueDetails; ui.detailScroll = 0; shot("39-queue-error-details");
     ui.queueIndex = 4; shot("98-queue-waiting-to-install");
+    const auto savedQueueUrl = ui.downloads[4].entry.url;
+    ui.downloads[4].entry.url = "http://preview.invalid/pkg/ARK%20Survival%20Evolved%20-%20%5BEU%5D%20%5BEN%5D%20%5B2.98%5D.pkg";
+    shot("99-queue-readable-url"); ui.downloads[4].entry.url = savedQueueUrl;
     ui.queueIndex = 5; shot("48-queue-verification");
     ui.screen = Screen::Backups; ui.backupIndex = 0; shot("40-usb-backup");
     ui.restoreDevice = ui.backupDevices.front().path; ui.restoreFilename = ui.backupDevices.front().files.front(); ui.screen = Screen::ConfirmRestore; shot("41-restore-confirmation");

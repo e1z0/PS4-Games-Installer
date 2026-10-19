@@ -1,5 +1,19 @@
 # Implementation progress
 
+## Readable queue package URLs — 2026-10-19
+
+- Package progress and diagnostics used the raw saved URL, while Game Details
+  already used the readable URL formatter. Reuse that formatter and label the
+  field Package URL; decode spaces/brackets/UTF-8 once for display only.
+- Regression covers the displayed path/query and verifies that queue persistence
+  retains the original encoded URL. Add an encoded ARK-path desktop capture.
+- Full host suite and all 19 Python integrations passed. Built/validated r48,
+  including package hashes/signatures and launcher imports, and inspected the
+  decoded path in its desktop diagnostics capture. `make deploy` uploaded
+  `PS4Game_installer-r48.pkg`; FTP readback matched SHA-256
+  `a755ab37a9a89452c65692593957b09d07e17f41e529a02b17ba703bd9f51fc2`.
+  Physical PS4 display confirmation is pending.
+
 ## Large-package timeouts and serial installation — 2026-10-19
 
 - Retrieved the PS4 app log, queue and task records over the configured FTP target.

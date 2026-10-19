@@ -1,5 +1,11 @@
 # Changelog
 
+## r48 — Readable queue package URLs — 2026-10-19
+
+- Decode percent-escaped package URLs in Package progress and diagnostics, with
+  a Package URL label. Downloads and queue records retain their original URL.
+- Host tests, package validation and desktop visual review passed; deployed r48.
+
 ## r47 — Download recovery and serial installation — 2026-10-19
 
 - Tolerate longer package-server stalls and retry transient download interruptions.

@@ -1,4 +1,5 @@
 #include "ui.hpp"
+#include "metadata.hpp"
 #include "sfo.hpp"
 #include <algorithm>
 
@@ -55,7 +56,7 @@ std::vector<std::string> Ui::queueDetails() const {
     return {job.entry.name, job.entry.titleId + " / " + packageKindName(job.entry) + " / v" + (job.entry.version.empty() ? "?" : job.entry.version),
         queueProgress(job), "PS4 task: " + (job.task < 0 ? std::string("not registered / released") : std::to_string(job.task)),
         job.message, "Transferred bytes only measure download progress. Installation needs PS4 confirmation.",
-        "A failed or cancelled package can be retried with X. Triangle cancels an owned active task.", job.entry.url};
+        "A failed or cancelled package can be retried with X. Triangle cancels an owned active task.", "Package URL: " + readableUrl(job.entry.url)};
 }
 InstallRequirements Ui::requirements() const {
     std::vector<Entry> bases;

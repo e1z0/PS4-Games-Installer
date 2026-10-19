@@ -65,6 +65,13 @@ int main() {
     assert(grouped.size() == 2 && grouped[0].group == grouped[1].group && grouped[0].index == 1 && grouped[1].index == 2);
     assert(parseSettings(serializeSettings(settings)).grouping == Grouping::Title);
 
+    Ui diagnostics;
+    QueueItem encodedUrl; encodedUrl.entry = entries[0];
+    encodedUrl.entry.url = "http://nas/ARK%20Survival%20Evolved%20%5BEU%5D.pkg?token=a%2Bb%2520";
+    diagnostics.downloads = {encodedUrl};
+    assert(diagnostics.queueDetails().back() == "Package URL: http://nas/ARK Survival Evolved [EU].pkg?token=a+b%20");
+    assert(parseQueue(serializeQueue(diagnostics.downloads))[0].entry.url == encodedUrl.entry.url);
+
     std::vector<QueueItem> queue; enqueueJob(queue, entries[0], 100); rejects([&] { enqueueJob(queue, entries[0], 101); });
     queue[0].stage = QueueStage::Downloading; sampleJob(queue[0], 100, 200, 2); assert(queue[0].bytesPerSecond == 50);
     queue[0].stage = QueueStage::Ready;

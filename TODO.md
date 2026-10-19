@@ -1,5 +1,12 @@
 # Work tracker
 
+## Readable package URL in queue diagnostics
+
+- [x] Reuse the display decoder while preserving the original encoded URL.
+- [x] Finish host tests and desktop capture review for the validated r48 package.
+- [x] Deploy r48 through the configured private FTP target.
+- [ ] Confirm the readable package path in the PS4 diagnostics dialog.
+
 ## Large downloads and one installation at a time
 
 - [x] Retrieve real PS4 failure records and inspect ARK's server/header behavior.
