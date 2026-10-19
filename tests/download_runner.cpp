@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
             if (mode == "cancel" && bytes) cancelled = true;
         });
         assert(entry.url == url); // Redirects must not change the catalog/queue identity.
-        assert(mode == "range" || mode == "redirect" || mode == "local" || mode == "https-range" || mode == "upgrade");
+        assert(mode == "range" || mode == "redirect" || mode == "local" || mode == "https-range" || mode == "upgrade" || mode == "transient");
         if (mode == "range" || mode == "redirect") assert(task == 91 && remoteCalls == 1 && localCalls == 0 && updates == 0);
         else {
             assert(task == 92 && localCalls == 1 && remoteCalls == 0 && updates > 1);
@@ -75,6 +75,8 @@ int main(int argc, char** argv) {
         else if (mode == "tls-error") assert(message.find("certificate") != std::string::npos);
         else throw;
         assert(remoteCalls == 0 && localCalls == 0);
-        assert(!std::filesystem::exists(path) && !std::filesystem::exists(path + ".part"));
+        assert(!std::filesystem::exists(path));
+        if (mode == "cancel" || mode == "truncated") assert(std::filesystem::file_size(path + ".part") > 0);
+        else assert(!std::filesystem::exists(path + ".part"));
     }
 }

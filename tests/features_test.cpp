@@ -67,6 +67,10 @@ int main() {
 
     std::vector<QueueItem> queue; enqueueJob(queue, entries[0], 100); rejects([&] { enqueueJob(queue, entries[0], 101); });
     queue[0].stage = QueueStage::Downloading; sampleJob(queue[0], 100, 200, 2); assert(queue[0].bytesPerSecond == 50);
+    queue[0].stage = QueueStage::Ready;
+    assert(queueActive(queue[0].stage) && queueStageName(queue[0].stage) == "Waiting to install");
+    assert(parseQueue(serializeQueue(queue))[0].stage == QueueStage::Ready);
+    queue[0].stage = QueueStage::Downloading;
     const auto encoded = serializeQueue(queue); assert(parseQueue(encoded)[0].transferred == 100);
     queue[0].backgroundTransfer = true; assert(parseQueue(serializeQueue(queue))[0].backgroundTransfer);
     queue[0].stage = QueueStage::Verifying; queue[0].verificationStarted = 100; queue[0].systemCompleted = true;

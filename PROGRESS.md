@@ -1,5 +1,41 @@
 # Implementation progress
 
+## Large-package timeouts and serial installation — 2026-10-19
+
+- Retrieved the PS4 app log, queue and task records over the configured FTP target.
+  ARK failed during transfer with `0x80431068`; the last saved count was
+  2,818,506,752 of 99,383,443,456 bytes, without a registered installation task.
+  Amnesia also recorded a send timeout. The console downloads directory was empty.
+- Independently checked ARK's server responses: both initial and nonzero Range
+  requests return HTTP 200/full length. Its PKG header and catalog agree on the
+  99,383,443,456-byte size and Content ID. This identifies a network timeout during
+  staging, not an observed BGFT installation error or package-size mismatch.
+- Package reads now allow 60 seconds idle, with 30-second connection/send limits.
+  Retry transient interruptions twice and retain partial data on exhaustion,
+  cancellation and app exit. Replayed streams compare every saved prefix byte
+  before appending; changed content is rejected. Servers ignoring Range still
+  retransmit that prefix. Complete staging files remain reusable.
+- Separate queued downloading from registration. Complete files persist as
+  Waiting to install; only one owned PS4 installation runs, including retained
+  tasks and fresh-library verification. Further downloads can stage while it runs.
+  Preserve legacy task monitoring, cancellation, dependency guards and completion
+  reporting. A restarted app can advance its downloaded waiters.
+- Added regressions for retry exhaustion/recovery, changed prefixes, cancellation,
+  exact 99 GB file sizes, native timeout policy and saved waiter ordering/restart.
+- Full host/native suite and all 19 Python integrations passed, including real
+  truncated-response recovery and regressions for serial registration, downloaded
+  waiter restart/cancellation, dependency ordering and account-session propagation.
+  Allowed asynchronous App tests five seconds for durable staging writes on slow
+  Docker/CI filesystems; queue-state assertions remain unchanged in strength.
+- Built and validated `dist/PS4Game_installer-r47.pkg` (6,619,136 bytes), including
+  package signatures/hashes and launcher imports. Generated desktop captures and
+  inspected the queue plus Waiting to install diagnostics. No compiler warnings.
+  SHA-256: `231a1d678207f636f34d2d667e3691ab110a8ce00e4c5daf8adee085ae53f28f`.
+- `make deploy` uploaded r47 to the configured PS4 FTP `/data/pkg/` target.
+  Independent FTP readback matches the validated artifact's SHA-256.
+  Full ARK installation and sequential installation on PS4 11.00 + GoldHEN still
+  need hardware confirmation; deployment does not install or launch the new app.
+
 ## Internet Archive authenticated downloads — 2026-10-19
 
 - r45 passes TLS on the user's PS4 9.00 but receives HTTP 401 for a package that

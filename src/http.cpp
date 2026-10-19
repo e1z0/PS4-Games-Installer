@@ -99,9 +99,9 @@ static HttpTransferInfo performTransfer(const std::string& url, const HttpSink& 
         curl_easy_setopt(curl.get(), CURLOPT_URL, current.c_str());
         curl_easy_setopt(curl.get(), CURLOPT_PROTOCOLS_STR, "http,https");
         curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 0L);
-        curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 10L);
+        curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, document ? 10L : 30L);
         curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_LIMIT, 1L);
-        curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_TIME, 10L);
+        curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_TIME, document ? 10L : 60L);
         curl_easy_setopt(curl.get(), CURLOPT_NOSIGNAL, 1L);
         curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "PS4-Games-Installer/1.0");
         SensitiveText cookie{session ? archiveCookieForUrl(current, *session) : std::string()};
@@ -151,8 +151,13 @@ static HttpTransferInfo performTransfer(const std::string& url, const HttpSink& 
         curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &status);
         curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &length);
         const bool redirect = isHttpRedirect(static_cast<int>(status));
-        if (result != CURLE_OK && !((stream.stopped || redirect) && result == CURLE_WRITE_ERROR))
-            throw std::runtime_error(label + " download failed: " + curl_easy_strerror(result));
+        if (result != CURLE_OK && !((stream.stopped || redirect) && result == CURLE_WRITE_ERROR)) {
+            const auto error = label + " download failed: " + curl_easy_strerror(result);
+            if (result == CURLE_OPERATION_TIMEDOUT || result == CURLE_RECV_ERROR || result == CURLE_SEND_ERROR ||
+                result == CURLE_GOT_NOTHING || result == CURLE_PARTIAL_FILE || result == CURLE_COULDNT_CONNECT)
+                throw HttpTransferFailure(error);
+            throw std::runtime_error(error);
+        }
         if (redirect) {
             if (loginBody) throw std::runtime_error("Internet Archive sign-in redirects are not allowed");
             current = nextHttpUrl(current, redirectLocation(headers.text), redirects);
@@ -290,12 +295,12 @@ struct Request {
     }
 };
 Network& network() { static Network instance; return instance; }
-void setRequestPolicy(HttpApi& api, int id) {
+void setRequestPolicy(HttpApi& api, int id, bool document) {
     check(api.setAutoRedirect(id, 0), "Disable automatic redirects");
-    check(api.setRecvTimeout(id, 10000000), "Set receive timeout");
-    check(api.setConnectTimeout(id, 10000000), "Connect timeout");
+    check(api.setRecvTimeout(id, document ? 10000000 : 60000000), "Set receive timeout");
+    check(api.setConnectTimeout(id, document ? 10000000 : 30000000), "Connect timeout");
     check(api.setResolveTimeout(id, 10000000), "DNS timeout");
-    check(api.setSendTimeout(id, 10000000), "Send timeout");
+    check(api.setSendTimeout(id, document ? 10000000 : 30000000), "Send timeout");
 }
 std::string requestLocation(HttpApi& api, int request) {
     char* headers = nullptr; size_t length = 0;
@@ -339,7 +344,7 @@ static HttpTransferInfo performTransfer(const std::string& url, const HttpSink& 
         if (document && sceKernelGetProcessTime() > deadline) throw std::runtime_error("Catalog download timed out");
         Request r{api};
         r.tmpl = api.createTemplate(net.http, "PS4-Games-Installer/1.0", ORBIS_HTTP_VERSION_1_1, 0);
-        check(r.tmpl, "HTTP template"); setRequestPolicy(api, r.tmpl);
+        check(r.tmpl, "HTTP template"); setRequestPolicy(api, r.tmpl, document);
         // Evaluate the artwork exception for each hop, so redirects cannot carry
         // this legacy exception to a different origin or path.
         constexpr char imageOrigin[] = "https://images.igdb.com/igdb/image/upload/";
@@ -367,7 +372,10 @@ static HttpTransferInfo performTransfer(const std::string& url, const HttpSink& 
                 // The existing App error path writes this same bounded diagnostic to
                 // app.log. Query before abort/deletion and retain the original send code.
                 const auto details = nativeRequestDiagnostics(net, r.req, current.compare(0, 8, "https://") == 0);
-                throw std::runtime_error(action + " (" + nativeHex(sent) + ");" + details);
+                const auto error = action + " (" + nativeHex(sent) + ");" + details;
+                if (static_cast<uint32_t>(sent) == 0x80431068u || static_cast<uint32_t>(sent) == 0x80431063u)
+                    throw HttpTransferFailure(error);
+                throw std::runtime_error(error);
             }
             HttpTransferInfo info;
             info.effectiveUrl = current;
@@ -392,7 +400,11 @@ static HttpTransferInfo performTransfer(const std::string& url, const HttpSink& 
                 const uint64_t now = sceKernelGetProcessTime();
                 if (document && now > deadline) throw std::runtime_error("Catalog download timed out");
                 if (!document && now >= nextWake) { sceSystemServicePowerTick(); nextWake = now + 10000000; }
-                const int n = api.read(r.req, block.data(), block.size()); check(n, "Read HTTP response");
+                const int n = api.read(r.req, block.data(), block.size());
+                if (static_cast<uint32_t>(n) == 0x80431068u || static_cast<uint32_t>(n) == 0x80431063u)
+                    throw HttpTransferFailure("Read HTTP response (" + nativeHex(n) + ");" +
+                        nativeRequestDiagnostics(net, r.req, current.compare(0, 8, "https://") == 0));
+                check(n, "Read HTTP response");
                 if (!n) break;
                 if (!sink(block.data(), n, info.length)) { api.abort(r.req); break; }
             }

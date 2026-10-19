@@ -33,6 +33,7 @@ void validateEntry(const Entry& e) {
 }
 }
 std::string queueStageName(QueueStage stage) {
+    if (stage == QueueStage::Ready) return "Waiting to install";
     const char* names[] = {"Queued", "Checking URL", "Downloading", "Registering with PS4", "Installing", "Verifying installation", "Completed", "Failed", "Cancelled", "Cancelling"};
     const auto index = static_cast<unsigned>(stage); return index < 10 ? names[index] : "Unknown";
 }
@@ -140,7 +141,7 @@ std::vector<QueueItem> parseQueue(const std::string& text) {
             job.task = number(item, "task", 2147483647);
             if (!taskIds.insert(job.task).second) throw std::runtime_error("Duplicate queue task");
         }
-        const auto stage = number(item, "stage", 10);
+        const auto stage = number(item, "stage", 11);
         // r30 wrote a temporary unconfirmed state; resume the original verifier.
         job.stage = stage == 10 ? QueueStage::Verifying : static_cast<QueueStage>(stage);
         job.transferred = number(item, "transferred"); job.total = number(item, "total"); job.updated = number(item, "updated");
@@ -185,7 +186,7 @@ std::vector<QueueItem> loadQueue(const std::string& directory) {
     auto queue = parseQueue(readFile(path));
     for (auto& job : queue) {
         if (job.task < 0 && (job.stage == QueueStage::Checking || job.stage == QueueStage::Downloading || job.stage == QueueStage::Registering || job.stage == QueueStage::Cancelling)) {
-            job.stage = QueueStage::Failed; job.message = "Interrupted when the app closed. Retry to reuse any complete staged package.";
+            job.stage = QueueStage::Failed; job.message = "Interrupted when the app closed. Retry to reuse saved package data.";
         } else if (job.task >= 0 && job.stage == QueueStage::Cancelling) {
             job.stage = QueueStage::Installing; job.message = "Cancellation was interrupted. Check status or cancel again.";
         }

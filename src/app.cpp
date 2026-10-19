@@ -15,13 +15,14 @@
 
 namespace psgi {
 namespace {
-enum class ResultKind { Local, Remote, Test, Storage, Install, Uninstall, Poll, Cancel, SourceTest, Maintenance, ArchiveLogin };
+enum class ResultKind { Local, Remote, Test, Storage, Download, Install, Uninstall, Poll, Cancel, SourceTest, Maintenance, ArchiveLogin };
 struct Result {
     ResultKind kind = ResultKind::Test;
     std::optional<std::vector<Entry>> local, remote;
     Entry entry;
     int task = -1;
     uint64_t freeBytes = 0;
+    uint64_t downloadSize = 0;
     std::optional<InstallStorage> storage;
     std::string message, catalogKey;
     std::map<std::string, TaskProgress> progress;
@@ -115,10 +116,10 @@ App::App(const std::string& data, bool preview)
         if (!entries.empty()) {
             Entry update = entries[0]; update.category = "updates"; update.packageType = "update"; update.version = "1.12"; update.name += " update"; update.url += "?update=1"; update.size = 4200000000ULL; entries.push_back(update);
             Entry dlc = entries[0]; dlc.category = "dlc"; dlc.packageType = "dlc"; dlc.name += " expansion"; dlc.url += "?dlc=1"; dlc.size = 1600000000ULL; entries.push_back(dlc);
-            const QueueStage stages[] = {QueueStage::Completed, QueueStage::Downloading, QueueStage::Installing, QueueStage::Failed, QueueStage::Waiting, QueueStage::Verifying};
+            const QueueStage stages[] = {QueueStage::Completed, QueueStage::Downloading, QueueStage::Installing, QueueStage::Failed, QueueStage::Ready, QueueStage::Verifying};
             for (size_t i = 0; i < std::min(size_t(6), entries.size()); ++i) {
-                QueueItem job; job.entry = entries[i]; job.stage = stages[i]; job.total = i == 4 ? 0 : entries[i].size; job.transferred = job.total * (i == 1 ? 43 : 100) / 100;
-                job.message = i == 3 ? "PS4 refused registration (sample error 0x80990086). Check PS4 Downloads and storage, then retry. Downloaded package kept." : i == 5 ? "Transfer finished; installed title/version has not yet been confirmed by a library scan." : "Desktop sample progress; no package is being transferred.";
+                QueueItem job; job.entry = entries[i]; job.stage = stages[i]; job.total = entries[i].size; job.transferred = job.total * (i == 1 ? 43 : 100) / 100;
+                job.message = i == 4 ? "Download complete. Waiting to install; only one PS4 installation runs at a time." : i == 3 ? "PS4 refused registration (sample error 0x80990086). Check PS4 Downloads and storage, then retry. Downloaded package kept." : i == 5 ? "Transfer finished; installed title/version has not yet been confirmed by a library scan." : "Desktop sample progress; no package is being transferred.";
                 job.bytesPerSecond = i == 1 ? 38000000 : 0; job.task = i == 2 ? 45 : -1; ui.downloads.push_back(job);
             }
         }
@@ -216,49 +217,67 @@ std::set<std::string> App::protectedStaging() const {
 }
 void App::startNextDownload(int user) {
     if (worker->busy() || !queueWritable) return;
+    // A tracked task reserves the only installer slot even when it has failed
+    // but could not yet be released. Verification also waits for a fresh scan.
+    const bool installBusy = !tasks.empty() || std::any_of(ui.downloads.begin(), ui.downloads.end(), [](const QueueItem& job) {
+        return job.stage == QueueStage::Verifying || job.stage == QueueStage::Registering;
+    });
     auto found = ui.downloads.end(); bool changed = false;
-    for (auto it = ui.downloads.begin(); it != ui.downloads.end(); ++it) if (it->stage == QueueStage::Waiting) {
-        if (!it->dependsOn.empty()) {
-            const auto* base = findJob(ui.downloads, it->dependsOn);
+    const auto eligible = [&](QueueItem& job) {
+        if (!job.dependsOn.empty()) {
+            const auto* base = findJob(ui.downloads, job.dependsOn);
             if (base && (base->stage == QueueStage::Failed || base->stage == QueueStage::Cancelled)) {
-                it->stage = QueueStage::Failed; it->message = "Base-game installation failed or was cancelled. Install the base game, then retry this package."; changed = true; continue;
+                job.stage = QueueStage::Failed; job.message = "Base-game installation failed or was cancelled. Install the base game, then retry this package."; changed = true; return false;
             }
             if (base && base->stage != QueueStage::Completed) {
-                it->message = "Waiting for the base game to finish installation and verification"; continue;
+                job.message = "Waiting for the base game to finish installation and verification"; return false;
             }
         }
-        const auto required = installationRequirements(it->entry, ui.installed);
-        if (!required.blockers.empty()) { it->stage = QueueStage::Failed; it->message = required.blockers.front(); changed = true; continue; }
-        found = it; break;
-    }
+        const auto required = installationRequirements(job.entry, ui.installed);
+        if (!required.blockers.empty()) { job.stage = QueueStage::Failed; job.message = required.blockers.front(); changed = true; return false; }
+        return true;
+    };
+    // Prefer an already downloaded package when the installation slot is free.
+    if (!installBusy) for (auto it = ui.downloads.begin(); it != ui.downloads.end(); ++it)
+        if (it->stage == QueueStage::Ready && eligible(*it)) { found = it; break; }
+    if (found == ui.downloads.end()) for (auto it = ui.downloads.begin(); it != ui.downloads.end(); ++it)
+        if (it->stage == QueueStage::Waiting && eligible(*it)) { found = it; break; }
     if (changed) { persistQueue(); syncQueued(); }
     if (found == ui.downloads.end()) return;
+    const bool submit = found->stage == QueueStage::Ready;
     const auto entry = found->entry;
-    found->stage = QueueStage::Checking; found->message = "Checking package URL and HTTP Range support"; found->updated = timestamp();
+    const auto size = found->total;
+    found->stage = submit ? QueueStage::Registering : QueueStage::Checking;
+    found->message = submit ? "Starting the next downloaded package; one installation at a time" : "Checking package URL before downloading";
+    found->updated = timestamp();
     try { persistQueue(); }
     catch (const std::exception& e) { found->stage = QueueStage::Failed; found->message = e.what(); ui.status = e.what(); syncQueued(); return; }
     activeDownloadUrl = entry.url;
     const auto session = archiveSession;
-    worker->start([this, entry, user, session] {
-        Result r; r.kind = ResultKind::Install; r.entry = entry;
-        QueueStage stage = QueueStage::Checking; uint64_t bytes = 0, total = 0;
+    worker->start([this, entry, user, session, submit, size] {
+        Result r; r.kind = submit ? ResultKind::Install : ResultKind::Download; r.entry = entry;
         try {
             if (packageKind(entry) == 1 || packageKind(entry) == 2) {
                 const auto required = installationRequirements(entry, scanInstalled());
                 if (!required.blockers.empty()) throw std::runtime_error(required.blockers.front());
             }
-            r.task = installPackage(entry, user, directory, &worker->cancelled, [&](uint64_t done, uint64_t length) {
-            bytes = done; total = length; worker->reportTransfer({entry.url, stage, done, length});
-        }, [this](const std::string& message) { log(message); worker->report(message); }, [&](InstallPhase phase) {
-            r.backgroundTransfer = phase == InstallPhase::RegisteringRemote;
-            stage = phase == InstallPhase::Checking ? QueueStage::Checking : phase == InstallPhase::Downloading ? QueueStage::Downloading : QueueStage::Registering;
-            worker->reportTransfer({entry.url, stage, bytes, total});
-        }, session); } catch (const SubmissionFailure& e) { r.message = e.what(); r.task = e.retainedTask; }
+            if (submit) {
+                if (worker->cancelled) throw std::runtime_error("Installation cancelled before registration");
+                log("Submitting downloaded package " + entry.titleId + " (" + std::to_string(size) + " bytes); serial installer slot");
+                r.task = installDownloadedPackage(entry, size, user, directory);
+            } else {
+                r.downloadSize = downloadPackage(entry, directory, &worker->cancelled, [&](uint64_t done, uint64_t length) {
+                    worker->reportTransfer({entry.url, QueueStage::Downloading, done, length});
+                }, [this](const std::string& message) { log(message); worker->report(message); }, session);
+                r.message = "Download complete. Waiting for the PS4 installation slot.";
+            }
+        } catch (const SubmissionFailure& e) { r.message = e.what(); r.task = e.retainedTask; }
         catch (const std::exception& e) { r.message = e.what(); }
         return r;
     });
-    ui.status = "Checking package URL and server range support..."; ui.loading = true;
+    ui.status = found->message; ui.loading = true;
 }
+
 void App::refresh(bool remote) {
     if (worker->busy()) { ui.status = "A background operation is running. Please try again shortly."; return; }
     if (demo) { ui.status = "Desktop preview library refreshed"; return; }
@@ -349,6 +368,27 @@ void App::tick(double elapsed, Video& video) {
         const bool receivedLocal = result->local.has_value();
         if (result->local || result->remote) ui.setLibraries(std::move(result->local), std::move(result->remote));
         if (resume && (resume->available ? !ui.available.empty() : receivedLocal)) { ui.restoreView(*resume); resume.reset(); }
+        if (result->kind == ResultKind::Download) {
+            activeDownloadUrl.clear();
+            if (auto* job = findJob(ui.downloads, result->entry.url)) {
+                job->updated = timestamp();
+                if (pendingCancels.erase(result->entry.url)) {
+                    job->stage = QueueStage::Cancelled;
+                    job->message = "Download cancelled. Saved package data was kept for retry.";
+                } else if (result->downloadSize) {
+                    job->stage = QueueStage::Ready;
+                    job->transferred = job->total = result->downloadSize;
+                    job->bytesPerSecond = 0;
+                    job->message = "Download complete. Waiting to install; only one PS4 installation runs at a time.";
+                } else {
+                    job->stage = QueueStage::Failed; job->message = result->message;
+                    ui.installError = result->message; ui.failedInstall = result->entry;
+                }
+                ui.status = job->message;
+                syncQueued();
+                try { persistQueue(); } catch (const std::exception& e) { log(e.what()); }
+            }
+        }
         if (result->kind == ResultKind::Install) {
             activeDownloadUrl.clear();
             if (auto* job = findJob(ui.downloads, result->entry.url)) {
@@ -689,7 +729,7 @@ void App::tick(double elapsed, Video& video) {
                     } else if (tasks.count(command.text)) {
                         pendingCancels.insert(command.text); job->stage = QueueStage::Cancelling; job->message = "Waiting for PS4 to release the owned task";
                     } else {
-                        job->stage = QueueStage::Cancelled; job->message = "Queue entry cancelled; no tracked PS4 task remains. Complete staged package kept for retry.";
+                        job->stage = QueueStage::Cancelled; job->message = "Queue entry cancelled; no tracked PS4 task remains. Saved package data kept for retry.";
                     }
                     persistQueue(); syncQueued(); ui.featureNotice = ui.status = job->message; break;
                 }

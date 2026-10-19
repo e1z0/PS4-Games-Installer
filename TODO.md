@@ -1,5 +1,14 @@
 # Work tracker
 
+## Large downloads and one installation at a time
+
+- [x] Retrieve real PS4 failure records and inspect ARK's server/header behavior.
+- [x] Keep/recheck partial packages and retry transient transfer interruptions.
+- [x] Separate downloads from a persistent, serial PS4 installation queue.
+- [x] Complete host/native regressions, package validation and queue visual review.
+- [x] Deploy the successful package using the private .env target.
+- [ ] Confirm ARK completes and multiple downloaded games install sequentially on PS4.
+
 ## Internet Archive authenticated downloads
 
 - [x] Confirm the same file downloads when the user signs into Archive.org.

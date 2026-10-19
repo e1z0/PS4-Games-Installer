@@ -41,7 +41,7 @@ void prepareConsole() {}
 int finishApplication(int status) { return status; }
 std::vector<Entry> scanInstalled() { std::lock_guard<std::mutex> lock(requestMutex); return localGames; }
 std::vector<Entry> demoLibrary() { return {}; }
-uint64_t freeSpace(const std::string&) { return 0; }
+uint64_t freeSpace(const std::string&) { return 1000000000000ULL; }
 void launchTitle(const std::string& id) {
     if (!allowLaunch) throw std::runtime_error("PS4 required");
     const auto saved = loadViewState(launchDirectory);
@@ -62,13 +62,17 @@ int queueInstall(const Entry&, int) {
     if (retainFailedStart) throw SubmissionFailure("Start task failed; owned registration retained", false, task);
     return task;
 }
-int queueLocalInstall(const Entry&, const std::string&, int) { throw std::runtime_error("PS4 required"); }
+int queueLocalInstall(const Entry& entry, const std::string& path, int user) {
+    assert(readFile(path) == std::string("\x7f" "CNT", 4));
+    assert(readFile(path + ".lease", 32) == "in-use\n");
+    return queueInstall(entry, user);
+}
 bool retireInactiveTask(int task) { assert(task >= 45); return allowRetirement; }
 void cancelInstallTask(int task) { assert(task >= 45); ++cancellations; if (failCancellation) throw std::runtime_error("Cancellation fixture failed; task retained"); }
 HttpTransferInfo httpTransfer(const std::string& url, const HttpSink& sink, bool range, const std::atomic<bool>* cancelled) {
     while (blockProbe && !(cancelled && *cancelled)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     if (cancelled && *cancelled) throw std::runtime_error("Download cancelled");
-    assert(allowInstalls && range); sink("\x7f" "CNT", 4, 4); return {206, 4, url};
+    assert(allowInstalls); sink("\x7f" "CNT", 4, 4); return {range ? 206 : 200, 4, url};
 }
 HttpTransferInfo httpTransferAuthenticated(const std::string& url, const HttpSink& sink, bool range,
                                          const ArchiveSession& session, const std::atomic<bool>* cancelled) {
@@ -114,7 +118,9 @@ std::string httpGetArtwork(const std::string& url, size_t limit, const std::atom
 
 using namespace psgi;
 void settleAt(App& app, Video& video, int line) {
-    for (int i = 0; i < 200; ++i) {
+    // Staging now performs durable writes in two worker phases. Allow slow
+    // Docker/CI filesystems without weakening any queue-state assertions.
+    for (int i = 0; i < 1000; ++i) {
         app.tick(0, video);
         if (!app.ui.loading && app.ui.screen != Screen::Splash) return;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -133,7 +139,9 @@ void editUrl(App& app, Video& video, const std::string& url) {
     assert(ui.settingsNotice.find("Select Save settings") != std::string::npos);
 }
 void waitForStatus(App& app, Video& video, double elapsed, const char* text) {
-    for (int i = 0; i < 200; ++i) {
+    // Staging now performs durable writes in two worker phases. Allow slow
+    // Docker/CI filesystems without weakening any queue-state assertions.
+    for (int i = 0; i < 1000; ++i) {
         app.tick(elapsed, video);
         if (app.ui.status.find(text) != std::string::npos) return;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -519,7 +527,7 @@ int main() {
         blockProbe = false;
         app.ui.handle(Button::Cross); app.tick(0, video); settle(app, video);
         assert(app.ui.downloads[0].stage == QueueStage::Installing && app.ui.downloads[0].task >= 100);
-        assert(app.ui.downloads[0].backgroundTransfer);
+        assert(!app.ui.downloads[0].backgroundTransfer);
         {
             // Simulate a historical confirmation racing with a new active task.
             auto& job = app.ui.downloads[0]; const auto savedStage = job.stage; const auto savedTask = job.task;
@@ -532,8 +540,8 @@ int main() {
             app.ui.screen = Screen::QueueDetails; app.ui.queueIndex = 0;
         }
         progressMode = 3;
-        waitForStatus(app, video, 4, "PS4 background download");
-        assert(app.ui.downloads[0].stage == QueueStage::Downloading && loadQueue(managed)[0].backgroundTransfer);
+        waitForStatus(app, video, 4, "PS4 is preparing or installing");
+        assert(app.ui.downloads[0].stage == QueueStage::Installing && !loadQueue(managed)[0].backgroundTransfer);
         progressMode = 0;
         waitForStatus(app, video, 8, "installation is still running");
         assert(app.ui.downloads[0].stage == QueueStage::Installing);
@@ -592,11 +600,38 @@ int main() {
     progressMode = 0;
     {
         const auto before = submissions.load(); App app(ordering); settle(app,video);
-        assert(submissions == before + 1 && app.ui.downloads[0].stage == QueueStage::Waiting && app.ui.downloads[2].task >= 100);
+        assert(submissions == before && app.ui.downloads[2].stage == QueueStage::Ready);
+        // Cancel a downloaded waiter without touching the active install, then
+        // retry it. Both its complete file and Ready state survive app restart.
+        const int cancelledBefore = cancellations;
+        app.ui.screen = Screen::QueueDetails; app.ui.queueIndex = 2;
+        app.ui.handle(Button::Triangle); app.ui.handle(Button::Cross); app.tick(0,video);
+        assert(app.ui.downloads[2].stage == QueueStage::Cancelled && cancellations == cancelledBefore);
+        assert(std::filesystem::exists(stagedPackagePath(ordering, unrelated.entry.url)));
+        app.ui.handle(Button::Cross); app.tick(0,video); settle(app,video);
+        assert(submissions == before && loadQueue(ordering)[2].stage == QueueStage::Ready);
+    }
+    {
+        const auto before = submissions.load(); App app(ordering); settle(app,video);
+        assert(submissions == before && app.ui.downloads[0].stage == QueueStage::Waiting);
+        assert(app.ui.downloads[2].stage == QueueStage::Ready && app.ui.downloads[2].task < 0);
+        assert(loadQueue(ordering)[2].stage == QueueStage::Ready);
+        assert(readFile(stagedPackagePath(ordering, unrelated.entry.url)) == std::string("\x7f" "CNT", 4));
         { std::lock_guard<std::mutex> lock(requestMutex); localGames = {base}; }
         progressMode = 2; allowRetirement = true;
-        for (unsigned i=0; i<200 && app.ui.downloads[0].task < 0; ++i) { app.tick(4,video); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
-        assert(app.ui.downloads[1].stage == QueueStage::Completed && app.ui.downloads[0].task >= 100 && submissions == before + 2);
+        for (unsigned i=0; i<200 && app.ui.downloads[2].task < 0; ++i) {
+            app.tick(4,video); std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        assert(app.ui.downloads[1].stage == QueueStage::Completed && app.ui.downloads[2].task >= 100 && submissions == before + 1);
+        // The patch downloads while the unrelated game installs, but cannot be
+        // registered until that task is released and its title is confirmed.
+        settle(app,video);
+        assert(app.ui.downloads[0].stage == QueueStage::Ready && app.ui.downloads[0].task < 0);
+        { std::lock_guard<std::mutex> lock(requestMutex); localGames = {base, unrelated.entry}; }
+        for (unsigned i=0; i<200 && app.ui.downloads[0].task < 0; ++i) {
+            app.tick(8,video); std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        assert(app.ui.downloads[2].stage == QueueStage::Completed && app.ui.downloads[0].task >= 100 && submissions == before + 2);
         assert(loadQueue(ordering)[0].dependsOn == base.url);
     }
     const auto retained = directory + "/retained-start"; std::filesystem::create_directory(retained); saveSettings(retained,offline);
@@ -711,6 +746,6 @@ int main() {
     std::puts("Settings persistence and tracked installation progress, failed-task recovery, retry and staging cleanup passed");
     std::puts("Launch handoff/session restart, rating persistence, uninstall confirmation/history and corrupt-record protection passed");
     std::puts("Registration refusal, persistent error/retry, IME deferral and acknowledged-task-error suppression passed");
-    std::puts("Bulk rollback/retry, saved collection restart, source setup, managed queue cancellation/retry and durable history passed");
+    std::puts("Bulk rollback/retry, saved collection restart, source setup, serial installation, downloaded-waiter restart/cancellation and durable history passed");
     std::puts("Archive.org sign-in failure, durable session restart, private storage and local sign-out passed");
 }

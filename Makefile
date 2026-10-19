@@ -150,11 +150,13 @@ build/host/install-native-test: tests/install_native_test.cpp tests/package_fixt
 	g++ $(HOSTFLAGS) -idirafter $(SDK)/include $(filter %.cpp %.o,$^) -o $@
 build/host/download-runner: tests/download_runner.cpp src/download.cpp src/http.cpp src/catalog.cpp src/metadata.cpp src/settings.cpp src/archive_auth.cpp build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) $(filter %.cpp %.o,$^) -lcurl -o $@
+build/host/download-recovery-test: tests/download_recovery_test.cpp src/download.cpp src/catalog.cpp src/metadata.cpp src/settings.cpp build/host/cJSON.o $(HEADERS)
+	g++ $(HOSTFLAGS) $(filter %.cpp %.o,$^) -o $@
 build/host/app-test: tests/app_test.cpp $(HOST_COMMON) $(addprefix src/,$(addsuffix .cpp,app artwork download)) build/host/cJSON.o build/generated/revision.hpp $(HEADERS)
 	g++ $(HOSTFLAGS) -Wno-unused-function $$(pkg-config --cflags freetype2) $(filter %.cpp %.o,$^) -o $@
 build/host/controller-test: tests/controller_test.cpp src/controller.cpp src/video.cpp $(HOST_COMMON) build/host/cJSON.o $(HEADERS)
 	g++ $(HOSTFLAGS) -idirafter $(SDK)/include $$(pkg-config --cflags freetype2 sdl2) $(filter %.cpp %.o,$^) $$(pkg-config --libs sdl2) -o $@
-test: assets build/host/archive-auth-test build/host/https-trust-test build/host/json-allocator-test build/host/browser-native-test build/host/metadata-test build/host/catalog-test build/host/catalog-check build/host/model-test build/host/userdata-test build/host/features-test build/host/maintenance-test build/host/browsing-test build/host/filesystem-native-test build/host/thread-native-test build/host/ui-test build/host/artwork-test build/host/render-animation-test build/host/startup-test build/host/lifecycle-test build/host/http-native-test build/host/launch-native-test build/host/uninstall-native-test build/host/storage-native-test build/host/install-native-test build/host/download-runner build/host/app-test build/host/controller-test
+test: assets build/host/archive-auth-test build/host/https-trust-test build/host/json-allocator-test build/host/browser-native-test build/host/metadata-test build/host/catalog-test build/host/catalog-check build/host/model-test build/host/userdata-test build/host/features-test build/host/maintenance-test build/host/browsing-test build/host/filesystem-native-test build/host/thread-native-test build/host/ui-test build/host/artwork-test build/host/render-animation-test build/host/startup-test build/host/lifecycle-test build/host/http-native-test build/host/launch-native-test build/host/uninstall-native-test build/host/storage-native-test build/host/install-native-test build/host/download-runner build/host/download-recovery-test build/host/app-test build/host/controller-test
 	./build/host/archive-auth-test
 	./build/host/https-trust-test
 	./build/host/json-allocator-test
@@ -176,6 +178,7 @@ test: assets build/host/archive-auth-test build/host/https-trust-test build/host
 	./build/host/uninstall-native-test
 	./build/host/storage-native-test
 	./build/host/install-native-test
+	./build/host/download-recovery-test
 	./build/host/app-test
 	./build/host/controller-test
 	python3 tests/http_test.py ./build/host/catalog-check

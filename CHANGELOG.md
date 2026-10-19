@@ -1,5 +1,17 @@
 # Changelog
 
+## r47 — Download recovery and serial installation — 2026-10-19
+
+- Tolerate longer package-server stalls and retry transient download interruptions.
+- Keep partial downloads for retry; verify saved bytes before appending so servers
+  ignoring Range cannot corrupt a package. Reuse complete downloaded packages.
+- Download packages to staging, then install one at a time. Show Waiting to install
+  for completed downloads, preserve waiters across restart and retain cancellation.
+- Console logs identify ARK's reported failure as a staging timeout. Host/native
+  regressions, all 19 Python integrations, package validation and queue visual
+  review passed. Deployed r47; full ARK and sequential-installation hardware
+  acceptance remain pending.
+
 ## r46 — Internet Archive sign-in — 2026-10-19
 
 - Add a masked Archive.org account sign-in/sign-out screen for downloads that

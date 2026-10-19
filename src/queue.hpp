@@ -2,7 +2,8 @@
 #include "catalog.hpp"
 
 namespace psgi {
-enum class QueueStage { Waiting, Checking, Downloading, Registering, Installing, Verifying, Completed, Failed, Cancelled, Cancelling };
+// Value 10 was written by r30 and remains a legacy verification state on disk.
+enum class QueueStage { Waiting, Checking, Downloading, Registering, Installing, Verifying, Completed, Failed, Cancelled, Cancelling, Ready = 11 };
 struct QueueItem {
     Entry entry;
     QueueStage stage = QueueStage::Waiting;

@@ -111,9 +111,12 @@ X there retries a failed/cancelled item. Triangle offers **Cancel task** for an
 active task or **Remove entry** for inactive history, with confirmation.
 Removing history keeps the installed game.
 
-**Keep the app open during direct downloads.** PS4 background tasks can continue
-after it closes. Reaching 100% downloaded does not mean installation has finished;
-wait for **Completed**. Use **PS4 Notifications > Downloads** for system task details.
+**Keep the app open while downloading and managing the queue.** Packages download
+to internal storage, then show **Waiting to install** until the single installation
+slot is free. Accepted PS4 installations can continue after the app closes; reopen
+it to advance waiting packages. Interrupted downloads keep partial data for retry.
+Reaching 100% downloaded does not mean installation has finished; wait for
+**Completed**. Use **PS4 Notifications > Downloads** for system task details.
 
 To choose a destination, open **Options > Settings > Installation destination**.
 External USB installation requires a connected **PS4 Extended Storage** drive;

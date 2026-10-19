@@ -16,6 +16,9 @@ struct HttpTransferInfo { int status = 0; uint64_t length = 0; std::string effec
 // Bounded-memory package transfer. Returning false from the sink stops a probe
 // without downloading the remaining body. total is the response Content-Length.
 using HttpSink = std::function<bool(const void*, size_t, uint64_t)>;
+// Transport interruption that a package download may safely retry. Certificate,
+// HTTP status, metadata and disk errors deliberately use other exception types.
+struct HttpTransferFailure : std::runtime_error { using std::runtime_error::runtime_error; };
 HttpTransferInfo httpTransfer(const std::string& url, const HttpSink& sink, bool probeRange,
                              const std::atomic<bool>* cancelled = nullptr);
 HttpTransferInfo httpTransferAuthenticated(const std::string& url, const HttpSink& sink, bool probeRange,

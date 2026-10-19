@@ -184,7 +184,7 @@ class DownloadTests(unittest.TestCase):
                     self.send_header("Content-Range", f"bytes 0-3/{len(BODY)}")
                     self.send_header("Accept-Ranges", "bytes")
                 self.end_headers()
-                if mode == "truncated" and not ranged:
+                if (mode == "truncated" or (mode == "transient" and calls[mode, False] == 1)) and not ranged:
                     data = data[:10000]
                 try:
                     for pos in range(0, len(data), 8192):
@@ -196,7 +196,7 @@ class DownloadTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            for mode in ("range", "local", "missing", "html", "cancel", "space", "unknown-length", "truncated", "safe-refusal", "uncertain-refusal"):
+            for mode in ("range", "local", "missing", "html", "cancel", "space", "unknown-length", "truncated", "safe-refusal", "uncertain-refusal", "transient"):
                 with self.subTest(mode=mode), tempfile.TemporaryDirectory(prefix="psgi-download-") as directory:
                     url = f"http://127.0.0.1:{server.server_port}/{mode}/A%20Game%20%5BUS%5D.pkg?token=kept"
                     result = subprocess.run([str(RUNNER), url, directory, mode], capture_output=True, text=True, timeout=15)
@@ -205,6 +205,8 @@ class DownloadTests(unittest.TestCase):
             self.assertEqual(calls["range", False], 0)
             self.assertEqual(calls["local", True], 2)
             self.assertEqual(calls["local", False], 1)
+            self.assertEqual(calls["truncated", False], 3)
+            self.assertEqual(calls["transient", False], 2)
         finally:
             server.shutdown()
             server.server_close()

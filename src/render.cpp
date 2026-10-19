@@ -656,7 +656,7 @@ bool Renderer::featureDialog(Canvas& c, Ui& ui) {
             c.text(std::to_string(active) + " active / " + std::to_string(ui.downloads.size()) + " tracked packages", 230, 260, 24, Accent, 1460);
             if (ui.downloads.empty()) c.text("Install a package from Available to add it here.", 230, 350, 29, White, 1460);
             else menu(c, ui.queueRows(), ui.queueIndex, 220, 330, 1480, 61, 7);
-            c.text(ui.featureNotice.empty() ? "Downloading, installing and verifying are separate stages. Open an item for details." : ui.featureNotice, 230, 810, 21, Muted, 1460);
+            c.text(ui.featureNotice.empty() ? "Downloads can wait; only one installation runs at a time. Open an item for details." : ui.featureNotice, 230, 810, 21, Muted, 1460);
             hints(c, 230, 884, {{Button::Cross, "Details"}, {Button::Triangle, "Refresh"}, {Button::Options, "Clear finished"}, {Button::Circle, "Back"}}, 21); return true;
         }
         case Screen::QueueDetails: {

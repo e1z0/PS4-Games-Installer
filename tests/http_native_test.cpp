@@ -37,6 +37,7 @@ bool imageCallback = false, keepalive = false, requestAborted = false;
 int initializations = 0, moduleLoads = 0, resolutions = 0, caLoads = 0;
 int poolDestructions = 0, sslTerminations = 0, httpTerminations = 0, rangeHeaders = 0;
 int sslErrorReads = 0, errnoReads = 0;
+uint32_t receiveTimeout = 0;
 SslPem** retainedCaList = nullptr;
 size_t offset = 0;
 std::atomic<bool>* cancellation = nullptr;
@@ -119,7 +120,7 @@ int psgiHttpSetAutoRedirect(int id, int enabled) {
     if (scenario == "policy-error") return static_cast<int32_t>(0x80431001u);
     policy = true; return 0;
 }
-int psgiHttpSetRecvTimeOut(int id, uint32_t value) { assert(policy && id == 4 && value == 10000000); return 0; }
+int psgiHttpSetRecvTimeOut(int id, uint32_t value) { assert(policy && id == 4 && (value == 10000000 || value == 60000000)); receiveTimeout = value; return 0; }
 int32_t sceHttpSetConnectTimeOut(int32_t id, uint32_t) { assert(id == 4); return 0; }
 int32_t sceHttpSetResolveTimeOut(int32_t id, uint32_t) { assert(id == 4); return 0; }
 int32_t sceHttpSetSendTimeOut(int32_t id, uint32_t) { assert(id == 4); return 0; }
@@ -186,6 +187,7 @@ int32_t sceHttpGetAllResponseHeaders(int32_t id, char** header, size_t* length) 
 int32_t sceHttpReadData(int32_t id, void* data, uint32_t capacity) {
     assert(req && id == 6);
     assert(responses.empty() || response().status == 200 || response().status == 206);
+    if (scenario == "read-timeout") return int32_t(0x80431068u);
     size_t count = std::min({size_t(capacity), size_t(7), responseBody.size() - offset});
     std::memcpy(data, responseBody.data() + offset, count); offset += count;
     if (scenario == "cancel") *cancellation = true;
@@ -201,7 +203,7 @@ int32_t sceHttpAddRequestHeader(int32_t id, const char* name, const char* value,
 int32_t sceHttpGetResponseContentLength(int32_t id, int32_t* type, size_t* length) {
     assert(id == 6);
     if (scenario == "no-document-length") return int32_t(0x80431071u);
-    *type = ORBIS_HTTP_CONTENTLEN_EXIST; *length = responseBody.size(); return 0;
+    *type = ORBIS_HTTP_CONTENTLEN_EXIST; *length = scenario == "large-package" ? 99383443456ULL : responseBody.size(); return 0;
 }
 int32_t sceHttpDeleteRequest(int32_t id) { assert(id == 6 && req); req = false; return 0; }
 int32_t sceHttpDeleteConnection(int32_t id) { assert(id == 5 && conn && !req); conn = false; return 0; }
@@ -363,6 +365,20 @@ int main() {
     reset("archive-auth-invalid-url");
     rejects([&] { psgi::httpTransferAuthenticated("https://archive.org@evil.example/file", [](const void*, size_t, uint64_t) { return true; }, false, session); }, "Invalid package URL");
     assert(requestedUrls.empty());
+    reset("read-timeout");
+    bool retryable = false;
+    try { psgi::httpTransfer(url, [](const void*, size_t, uint64_t) { return true; }, false); }
+    catch (const psgi::HttpTransferFailure& error) {
+        retryable = true; assert(std::string(error.what()).find("0x80431068") != std::string::npos);
+    }
+    assert(retryable && receiveTimeout == 60000000 && aborted && !req && !conn && !tmpl);
+    reset("large-package");
+    const auto large = psgi::httpTransfer(url, [](const void*, size_t, uint64_t total) {
+        assert(total == 99383443456ULL); return false;
+    }, false);
+    assert(large.length == 99383443456ULL && aborted);
+    reset("catalog-timeout-policy"); psgi::httpGet(url);
+    assert(receiveTimeout == 10000000);
     reset("archive-anonymous"); psgi::httpTransfer("https://archive.org/file", [](const void*, size_t, uint64_t) { return true; }, false);
     assert(!requestHeaders[0].count("Cookie"));
     reset("archive-catalog"); psgi::httpGet("https://archive.org/catalog");

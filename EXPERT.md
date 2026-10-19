@@ -584,15 +584,20 @@ still pending for the new r17 selector on PS4 11.00 + GoldHEN.
 
 Open **Options > Downloads** to manage up to 200 tracked packages. Installing
 adds a persistent waiting item, including when another transfer is running. Package
-preflights/direct downloads run one at a time; accepted PS4 tasks continue in the
-background and have a separate progress monitor.
+downloads run one at a time and can overlap one accepted PS4 installation. Every
+new download stages locally, then waits for the single installation slot. A tracked
+task reserves that slot until released; fresh installed-library verification must
+also finish before the next package is submitted. Existing tasks from older releases
+are monitored without stopping them; no additional installation starts while they
+remain tracked. Accepted PS4 tasks continue in the background if the app closes,
+but reopen it to advance downloaded waiters.
 
 PS4-managed remote transfers show Downloading until their data transfer finishes,
 then Installing. Staged local package copies stay in Installing. Queue records from
 earlier releases with unknown transfer mode retain their generic installation status.
 
 The queue distinguishes **Queued**, **Checking URL**, **Downloading**, **Registering
-with PS4**, **Installing**, **Verifying installation**, **Completed**, **Failed**,
+with PS4**, **Waiting to install**, **Installing**, **Verifying installation**, **Completed**, **Failed**,
 **Cancelling** and **Cancelled**. Transfer percentages, bytes, speed and approximate
 download time are shown when available. They do not measure installation progress.
 X opens diagnostics; X in diagnostics retries a failed or cancelled item.
@@ -640,22 +645,29 @@ queue files are preserved and block new queue writes until repaired.
 
 ![Remove an inactive queue entry](docs/images/remove-queue-entry.png)
 
-The app checks the actual PKG URL before submitting it. HTTP URLs use a small GET
-range request; HTTPS URLs use a normal GET that stops after the PKG signature,
-keeping the full content length available for retry/cache validation. A 404, HTML
-response or invalid package signature is reported before creating a PS4 task.
-A resolved HTTP URL that returns the requested four bytes with HTTP 206 uses BGFT
-directly. Redirect destinations do not replace the catalog entry's identity.
+The app checks the actual PKG URL with a normal GET that stops after the PKG
+signature, keeping the full 64-bit content length for staging/cache validation.
+A 404, HTML response or invalid package signature is reported before creating a
+PS4 task. Redirect destinations do not replace the catalog entry's identity.
 
-For HTTPS URLs, or when an HTTP server ignores ranges, the app streams the package to
-`/data/PS4-Game-Installer/downloads/`, then submits that local file to BGFT. This
-works around package servers that do not implement Range/HEAD correctly. **Keep
-the app open during the direct download.** Its percentage is shown in the status
-bar. Exiting cancels an unfinished transfer and removes the partial file. Internal
+All new queued packages stream to `/data/PS4-Game-Installer/downloads/` before local
+BGFT installation. This also works with servers that ignore Range/HEAD. Internal
 storage needs room for the staging copy plus 64 MiB reserve, even when installing
-onto Extended Storage. Installing to internal storage also needs room for the
-installed game. HTTP servers with Range support can avoid this extra copy; HTTPS
-packages require it even when the server supports ranges.
+onto Extended Storage. Installing internally also needs room for the installed
+game. Multiple downloaded waiters consume staging space until installed or cleaned.
+
+Package receives tolerate 60 seconds without data (catalogs keep their shorter
+limits). Transient timeouts/disconnections get up to two automatic reconnections;
+certificate, HTTP status, disk and content-integrity errors are not retried this way.
+Useful `.part` files survive exhaustion, cancellation and app exit. On Retry, the
+app streams from the start and compares every saved prefix byte before appending;
+a changed source is rejected and its partial copy discarded. This avoids corrupt
+concatenation when a server ignores Range. Rechecking the prefix still consumes
+network bandwidth; this is not a server-side Range resume. Complete downloaded
+packages are reused without transferring their bodies again.
+
+**Waiting to install** persists across app restarts and can be cancelled without
+stopping the currently installing game. Retry reuses its complete staging file.
 
 **The download percentage measures the package copy, not installation.** After
 100%, the app still needs the PS4 to accept an installation task. A refusal opens
