@@ -1,9 +1,11 @@
 #include "platform.hpp"
 #include "http_redirect.hpp"
 #include "https_trust.hpp"
+#include "log.hpp"
 #include <stdexcept>
 #include <cstdio>
 #include <memory>
+#include <mutex>
 #include <exception>
 
 #ifndef PSGI_CA_BUNDLE_PATH
@@ -36,20 +38,30 @@ std::string statusFailure(const std::string& label, int status, bool authenticat
         return "Internet Archive denied this download. Sign in again and confirm access to this file.";
     return label + " HTTP " + std::to_string(status) + "; check the URL on your server";
 }
+
 const std::vector<std::string>& trustedCertificates() {
-    static const auto certificates = [] {
+    static std::mutex m;
+    static std::unique_ptr<std::vector<std::string>> certificates;
+    std::lock_guard<std::mutex> lock(m);
+
+    if (!certificates) {
         const std::string bundlePath = PSGI_CA_BUNDLE_PATH;
         auto roots = psgi::parseTrustedCertificates(psgi::readFile(bundlePath, 1024 * 1024));
         const auto slash = bundlePath.find_last_of('/');
         const auto directory = slash == std::string::npos ? std::string() : bundlePath.substr(0, slash + 1);
         // This exact CA-published intermediate is verified/pinned by the asset tests.
         // Older firmware can reject GoDaddy's supplied cross-signed root path.
-        auto intermediate = psgi::parseTrustedCertificates(psgi::readFile(directory + "godaddy-secure-g2.pem", 16 * 1024));
-        if (intermediate.size() != 1) throw std::runtime_error("Expected one GoDaddy compatibility certificate");
-        roots.insert(roots.begin(), std::move(intermediate.front()));
-        return roots;
-    }();
-    return certificates;
+        auto goDaddyCert = psgi::parseTrustedCertificates(psgi::readFile(directory + "godaddy-secure-g2.pem", 16 * 1024));
+        if (goDaddyCert.size() != 1) throw std::runtime_error("Expected one GoDaddy compatibility certificate");
+        roots.insert(roots.begin(), std::move(goDaddyCert.front()));
+
+        auto letsEncryptCert = psgi::parseTrustedCertificates(psgi::readFile(directory + "letsencrypt-gen-y.pem", 16 * 1024));
+        if (letsEncryptCert.size() != 2) throw std::runtime_error("Expected two or more Let's Encrypt compatibility certificates");
+        roots.insert(roots.begin(), std::move(letsEncryptCert.front()));
+
+        certificates = std::make_unique<decltype(roots)>(roots);
+    }
+    return *certificates;
 }
 }
 namespace psgi {
@@ -289,7 +301,15 @@ struct Request {
         if (tmpl >= 0) api.deleteTemplate(tmpl);
     }
 };
-Network& network() { static Network instance; return instance; }
+Network& network() {
+    static std::mutex m;
+    static std::unique_ptr<Network> instance;
+    std::lock_guard<std::mutex> lock(m);
+    if (!instance)
+        instance = std::make_unique<Network>();
+
+    return *instance;
+}
 void setRequestPolicy(HttpApi& api, int id) {
     check(api.setAutoRedirect(id, 0), "Disable automatic redirects");
     check(api.setRecvTimeout(id, 10000000), "Set receive timeout");
@@ -355,20 +375,25 @@ static HttpTransferInfo performTransfer(const std::string& url, const HttpSink& 
             if (!cookie.value.empty()) check(api.addHeader(r.req, "Cookie", cookie.value.c_str(), 0), "Set account session");
             if (loginBody) check(api.addHeader(r.req, "Content-Type", "application/x-www-form-urlencoded", 0), "Set sign-in content type");
             if (probeRange) check(api.addHeader(r.req, "Range", "bytes=0-3", 0), "Set package range");
+
             const int sent = api.send(r.req, loginBody ? loginBody->data() : nullptr, loginBody ? loginBody->size() : 0);
             if (sent < 0) {
                 const size_t begin = current.find("://") + 3;
                 const size_t end = current.find_first_of("/?", begin);
                 const std::string host = current.substr(begin, end - begin).substr(0, 128);
-                // Show the failing redirect host without exposing signed paths or queries.
-                const std::string action = std::string(static_cast<uint32_t>(sent) == 0x8095F00Cu
+
+                // Only query SSL errors if the failure was specifically an SSL handshake failure
+                const bool isSslError = (static_cast<uint32_t>(sent) == 0x8095F00Cu);
+
+                const std::string action = std::string(isSslError
                     ? "HTTPS certificate not trusted for " : "Send request to ") + host +
                     " (redirect " + std::to_string(redirects) + ")";
-                // The existing App error path writes this same bounded diagnostic to
-                // app.log. Query before abort/deletion and retain the original send code.
-                const auto details = nativeRequestDiagnostics(net, r.req, current.compare(0, 8, "https://") == 0);
+
+                const auto details = nativeRequestDiagnostics(net, r.req, current.compare(0, 8, "https://") == 0 && isSslError);
+
                 throw std::runtime_error(action + " (" + nativeHex(sent) + ");" + details);
             }
+
             HttpTransferInfo info;
             info.effectiveUrl = current;
             check(api.getStatus(r.req, &info.status), "HTTP status");

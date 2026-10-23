@@ -1,40 +1,87 @@
 SHELL := /bin/bash
-.DEFAULT_GOAL := all
+.DEFAULT_GOAL := default
 IMAGE ?= ps4-games-installer:build
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT := 1
+.PHONY: default all image test check preview screenshots clean validate package package-internal assets deploy compile-commands
 
-.PHONY: all image test check preview screenshots clean validate package package-internal assets deploy
+default: package
+
 image:
 	docker build --label org.psgi.dockerfile="$$(sha256sum Dockerfile | cut -d ' ' -f1)" -t $(IMAGE) .
+
+.PHONY: lsp-ps4 lsp-host
+lsp-ps4:
+	@printf '%s\n' \
+		'CompileFlags:' \
+		'  CompilationDatabase: .cdb/ps4' \
+		'---' \
+		'If:' \
+		'  PathMatch: (src/desktop\.cpp|tests/.*)' \
+		'CompileFlags:' \
+		'  CompilationDatabase: .cdb/host' > .clangd
+lsp-host:
+	@printf '%s\n' \
+		'CompileFlags:' \
+		'  CompilationDatabase: .cdb/host' \
+		'---' \
+		'If:' \
+		'  PathMatch: (src/(console|install|lifecycle|storage_native|filesystem_native)\.cpp|third_party/cjson/.*)' \
+		'CompileFlags:' \
+		'  CompilationDatabase: .cdb/ps4' > .clangd
 
 ifneq ($(PSGI_IN_CONTAINER),1)
 all package test check screenshots validate deploy:
 	@test "$$(docker image inspect $(IMAGE) --format '{{index .Config.Labels "org.psgi.dockerfile"}}' 2>/dev/null)" = "$$(sha256sum Dockerfile | cut -d ' ' -f1)" || $(MAKE) image
 	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/work" \
-      -e SDL_VIDEODRIVER=dummy $(IMAGE) make $@ CONFIG="$(CONFIG)"
+    	-e SDL_VIDEODRIVER=dummy -e PSGI_IN_CONTAINER=1 $(IMAGE) make $@ CONFIG="$(CONFIG)"
 preview:
 	@test "$$(docker image inspect $(IMAGE) --format '{{index .Config.Labels "org.psgi.dockerfile"}}' 2>/dev/null)" = "$$(sha256sum Dockerfile | cut -d ' ' -f1)" || $(MAKE) image
 	@if [[ -z "$$DISPLAY" ]]; then $(MAKE) screenshots; else \
-        preview_args=(--rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/work" -v /tmp/.X11-unix:/tmp/.X11-unix:ro -e DISPLAY -e SDL_VIDEODRIVER=x11); \
-        if [[ -n "$$XAUTHORITY" && -f "$$XAUTHORITY" ]]; then preview_args+=(-v "$$XAUTHORITY:/tmp/psgi-xauth:ro" -e XAUTHORITY=/tmp/psgi-xauth); fi; \
-        docker run "$${preview_args[@]}" $(IMAGE) make preview; fi
+		preview_args=(--rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/work" -v /tmp/.X11-unix:/tmp/.X11-unix:ro -e DISPLAY -e SDL_VIDEODRIVER=x11 -e PSGI_IN_CONTAINER=1); \
+		if [[ -n "$$XAUTHORITY" && -f "$$XAUTHORITY" ]]; then preview_args+=(-v "$$XAUTHORITY:/tmp/psgi-xauth:ro" -e XAUTHORITY=/tmp/psgi-xauth); fi; \
+		docker run "$${preview_args[@]}" $(IMAGE) make preview; fi
 clean:
 	rm -rf build dist
+
+ifneq ($(and $(OO_PS4_TOOLCHAIN),$(wildcard $(OO_PS4_TOOLCHAIN)/link.x)),)
+HOST_SDK := $(patsubst %/,%,$(OO_PS4_TOOLCHAIN))
+SDK_DEP :=
+else
+HOST_SDK := $(CURDIR)/.sdk
+SDK_DEP := .sdk
+endif
+
+all: compile-commands
+
+.sdk:
+	@test "$$(docker image inspect $(IMAGE) --format '{{index .Config.Labels "org.psgi.dockerfile"}}' 2>/dev/null)" = "$$(sha256sum Dockerfile | cut -d ' ' -f1)" || $(MAKE) image
+	@id=$$(docker create $(IMAGE)) && rm -rf .sdk && docker cp $$id:/opt/openorbis .sdk; docker rm $$id >/dev/null
+
+compile-commands: $(SDK_DEP)
+	@test "$$(docker image inspect $(IMAGE) --format '{{index .Config.Labels "org.psgi.dockerfile"}}' 2>/dev/null)" = "$$(sha256sum Dockerfile | cut -d ' ' -f1)" || $(MAKE) image
+	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/work" \
+		-e PSGI_IN_CONTAINER=1 -e HOST_ROOT="$(CURDIR)" -e HOST_SDK="$(HOST_SDK)" $(IMAGE) make compile-commands-internal
 else
 SDK := $(OO_PS4_TOOLCHAIN)
 TOOLS := $(SDK)/bin/linux
 TITLE_ID := PGIN00001
 CONTENT_ID := IV0000-$(TITLE_ID)_00-PS4GAMEINSTALLER
 CROSSFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -D_POSIX_C_SOURCE=200809L \
-    -isysroot $(SDK) -isystem $(SDK)/include -Isrc -Ithird_party/cjson -Ithird_party/stb -Ibuild/generated -O2 -g -Wall -Wextra -MMD -MP
-COMMON := catalog metadata settings archive_auth library sfo installed storage userdata package queue backup source maintenance ui ui_features ui_browsing ui_details browser
+	-isysroot $(SDK) -isystem $(SDK)/include -Isrc -Ithird_party/cjson -Ithird_party/stb -Ibuild/generated -O2 -g -Wall -Wextra -MMD -MP
+COMMON := catalog metadata settings archive_auth library sfo installed storage userdata package queue backup source maintenance ui ui_features ui_browsing ui_details browser log
 UI_SOURCES := controller canvas artwork render app download demo video main
 CONSOLE := $(UI_SOURCES) http install console lifecycle storage_native filesystem_native
 PS4_OBJECTS := $(addprefix build/ps4/,$(addsuffix .o,$(COMMON) $(CONSOLE))) build/ps4/cJSON.o
+PS4_CDB_SRCS := $(addprefix src/,$(addsuffix .cpp,$(COMMON) $(CONSOLE))) third_party/cjson/cJSON.c
+HOST_CDB_SRCS := $(addprefix src/,$(addsuffix .cpp,$(COMMON) $(UI_SOURCES) http desktop)) $(wildcard tests/*.cpp)
 LIBS := -ljbc -lc++ -lSceVideoOut -lSceSysmodule -lSceLncUtil -lSceSystemService -lSceFreeType -lScePad -lSceUserService -lSceNet -lSceNetCtl -lSceSsl -lSceCommonDialog -lSceImeDialog -lc -lkernel
 HOSTFLAGS := -std=c++17 -DPSGI_HOST -Isrc -Ithird_party/cjson -Ithird_party/stb -Ibuild/generated -Wall -Wextra -Werror -O1 -g -pthread
 HEADERS := $(wildcard src/*.hpp) third_party/cjson/cJSON.h third_party/stb/stb_image.h
 HOST_COMMON := $(addprefix build/host/common/,$(addsuffix .o,$(COMMON)))
+CDB := .cdb
+CDB_CROSS := $(filter-out -MMD -MP,$(CROSSFLAGS))
+CDB_HOST := $(filter-out -Werror,$(HOSTFLAGS))
+CDB_MAP := /work=$(HOST_ROOT) $(SDK)=$(HOST_SDK)
 
 all package: assets
 	python3 scripts/package.py
@@ -50,11 +97,11 @@ assets/icon.png: assets/icon.svg
 
 build/ps4/%.o: src/%.cpp
 	@mkdir -p $(@D)
-	clang++ $(CROSSFLAGS) -std=c++17 -isystem $(SDK)/include/c++/v1 -c $< -o $@
+	clang++ $(CROSSFLAGS) -MJ $(@:.o=.json) -std=c++17 -isystem $(SDK)/include/c++/v1 -c $< -o $@
 build/ps4/http.o: CROSSFLAGS += -Wframe-larger-than=8192 -Werror=frame-larger-than
 build/ps4/cJSON.o: third_party/cjson/cJSON.c
 	@mkdir -p $(@D)
-	clang $(CROSSFLAGS) -c $< -o $@
+	clang $(CROSSFLAGS) -MJ $(@:.o=.json) -c $< -o $@
 
 build/app.elf: $(PS4_OBJECTS) Makefile
 	ld.lld -m elf_x86_64 -pie --script $(SDK)/link.x --eh-frame-hdr -L$(SDK)/lib -o $@ $(SDK)/lib/crt1.o $(PS4_OBJECTS) $(LIBS)
@@ -68,6 +115,21 @@ package-internal: build/pkg/eboot.bin assets
 	python3 scripts/metadata.py "$(SDK)" "$(REVISION)" "$(CONTENT_ID)" "$(TITLE_ID)"
 	cd build/pkg && $(TOOLS)/PkgTool.Core pkg_build pkg.gp4 ../package
 	$(TOOLS)/PkgTool.Core pkg_validate build/package/$(CONTENT_ID).pkg
+
+compile-commands-internal: build/generated/revision.hpp
+	@rm -rf $(CDB) && mkdir -p $(CDB)/frag-ps4 $(CDB)/frag-host
+	@set -e; for f in $(PS4_CDB_SRCS); do \
+	  	j=$(CDB)/frag-ps4/$$(echo $$f | tr / _).json; \
+	  	case $$f in \
+	    	*.c) clang $(CDB_CROSS) -fsyntax-only -MJ $$j $$f ;; \
+	    	*)   clang++ $(CDB_CROSS) -std=c++17 -isystem $(SDK)/include/c++/v1 -fsyntax-only -MJ $$j $$f ;; \
+	  	esac; done
+	@for f in $(HOST_CDB_SRCS); do \
+	  	clang++ $(CDB_HOST) -idirafter $(SDK)/include $$(pkg-config --cflags freetype2 sdl2) \
+	    	-fsyntax-only -MJ $(CDB)/frag-host/$$(echo $$f | tr / _).json $$f 2>/dev/null || true; done
+	@python3 scripts/cdb.py $(CDB)/frag-ps4  $(CDB)/ps4/compile_commands.json  $(CDB_MAP)
+	@python3 scripts/cdb.py $(CDB)/frag-host $(CDB)/host/compile_commands.json $(CDB_MAP)
+	@rm -rf $(CDB)/frag-ps4 $(CDB)/frag-host
 
 # Reuse identical host model/UI objects across tests and preview builds.
 # Sanitized/native adapters retain their separate compile recipes below.
