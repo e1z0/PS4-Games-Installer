@@ -19,7 +19,10 @@ namespace {
 const std::string body = R"({"DATA":{"http://fixture/game.pkg":{"name":"A game"}}})";
 constexpr const char* caPath = "build/host/test-cacert.pem";
 constexpr const char* intermediatePath = "build/host/godaddy-secure-g2.pem";
+constexpr const char* letsEncryptPath = "build/host/letsencrypt-gen-y.pem";
 const std::string intermediateCa = "-----BEGIN CERTIFICATE-----\r\nQw==\r\n-----END CERTIFICATE-----\r\n";
+const std::string letsEncryptOne = "-----BEGIN CERTIFICATE-----\r\nRA==\r\n-----END CERTIFICATE-----\r\n";
+const std::string letsEncryptTwo = "-----BEGIN CERTIFICATE-----\r\nRQ==\r\n-----END CERTIFICATE-----\r\n";
 const std::string caOne = "-----BEGIN CERTIFICATE-----\r\nQQ==\r\n-----END CERTIFICATE-----\r\n";
 const std::string caTwo = "-----BEGIN CERTIFICATE-----\r\nQg==\r\n-----END CERTIFICATE-----\r\n";
 struct Response { std::string url; int status; std::string headers; int tlsError = 0; };
@@ -46,11 +49,12 @@ void writeCa(const std::string& value, const char* path = caPath) {
     assert(out); out << value; assert(out);
 }
 void checkCaLifetime() {
-    assert(retainedCaList && retainedCaList[0] && retainedCaList[1] && retainedCaList[2]);
-    assert(retainedCaList[0] != retainedCaList[1] && retainedCaList[1] != retainedCaList[2]);
-    assert(std::string(retainedCaList[0]->ptr, retainedCaList[0]->size) == intermediateCa);
-    assert(std::string(retainedCaList[1]->ptr, retainedCaList[1]->size) == caOne);
-    assert(std::string(retainedCaList[2]->ptr, retainedCaList[2]->size) == caTwo);
+    assert(retainedCaList && retainedCaList[0] && retainedCaList[1] && retainedCaList[2] && retainedCaList[3]);
+    assert(retainedCaList[0] != retainedCaList[1] && retainedCaList[1] != retainedCaList[2] && retainedCaList[2] != retainedCaList[3]);
+    assert(std::string(retainedCaList[0]->ptr, retainedCaList[0]->size) == letsEncryptOne);
+    assert(std::string(retainedCaList[1]->ptr, retainedCaList[1]->size) == intermediateCa);
+    assert(std::string(retainedCaList[2]->ptr, retainedCaList[2]->size) == caOne);
+    assert(std::string(retainedCaList[3]->ptr, retainedCaList[3]->size) == caTwo);
 }
 void reset(const char* mode) {
     assert(!tmpl && !conn && !req);
@@ -100,12 +104,13 @@ int32_t sceHttpTerm(int32_t id) {
 }
 int32_t sceHttpsLoadCert(int32_t id, int32_t count, void* list, void* client, void* key) {
     assert(id == 3 && initialized && !tmpl && !conn && !req);
-    assert(count == 3 && list && !client && !key);
+    assert(count == 4 && list && !client && !key);
     auto** certificates = static_cast<SslPem**>(list);
-    assert(certificates[0] != certificates[1] && certificates[1] != certificates[2]);
-    assert(std::string(certificates[0]->ptr, certificates[0]->size) == intermediateCa);
-    assert(std::string(certificates[1]->ptr, certificates[1]->size) == caOne);
-    assert(std::string(certificates[2]->ptr, certificates[2]->size) == caTwo);
+    assert(certificates[0] != certificates[1] && certificates[1] != certificates[2] && certificates[2] != certificates[3]);
+    assert(std::string(certificates[0]->ptr, certificates[0]->size) == letsEncryptOne);
+    assert(std::string(certificates[1]->ptr, certificates[1]->size) == intermediateCa);
+    assert(std::string(certificates[2]->ptr, certificates[2]->size) == caOne);
+    assert(std::string(certificates[3]->ptr, certificates[3]->size) == caTwo);
     ++caLoads;
     if (scenario == "ca-rejected") return int32_t(0x8095F00Au);
     retainedCaList = certificates;
@@ -269,12 +274,16 @@ int main() {
     assert(initializations == 0 && moduleLoads == 0 && resolutions == 0);
     // /app0 is no longer reachable after the console's privilege/root change.
     // Prewarm the bundle first and prove all later network work uses that copy.
-    writeCa(caOne + caTwo); std::remove(intermediatePath);
+    writeCa(caOne + caTwo); std::remove(intermediatePath); std::remove(letsEncryptPath);
     rejects([&] { psgi::prepareHttpTrust(); }, "Cannot open"); networkReleased();
     writeCa(intermediateCa + caOne, intermediatePath);
     rejects([&] { psgi::prepareHttpTrust(); }, "Expected one GoDaddy"); networkReleased();
     writeCa(intermediateCa, intermediatePath);
-    psgi::prepareHttpTrust(); std::remove(caPath); std::remove(intermediatePath);
+    rejects([&] { psgi::prepareHttpTrust(); }, "Cannot open"); networkReleased();
+    writeCa(letsEncryptOne, letsEncryptPath);
+    rejects([&] { psgi::prepareHttpTrust(); }, "Expected two or more Let's Encrypt"); networkReleased();
+    writeCa(letsEncryptOne + letsEncryptTwo, letsEncryptPath);
+    psgi::prepareHttpTrust(); std::remove(caPath); std::remove(intermediatePath); std::remove(letsEncryptPath);
     psgi::prepareHttpTrust();
     reset("load-failure"); rejects([&] { psgi::httpGet(url); }, "Load HTTP client (0x80020002)");
     assert(moduleLoads == 1 && initializations == 0);
@@ -466,7 +475,7 @@ int main() {
         }, "cdn.fixture (redirect 1)");
         assert(message.find("0x8095F00C") != std::string::npos);
         for (const char* detail : {"ssl=0x8095F00C", "verify=0x00000020", "errno=54",
-                                   "ca=3", "ca_load=0x00000000", "keepalive=1"})
+                                   "ca=4", "ca_load=0x00000000", "keepalive=1"})
             assert(message.find(detail) != std::string::npos);
         assert(sslErrorReads == 1 && errnoReads == 1 && aborted);
         assert(message.find("private") == std::string::npos && message.find("token") == std::string::npos &&
@@ -482,7 +491,7 @@ int main() {
         assert(message.find("ssl_query=0x80431001") != std::string::npos &&
                message.find("errno_query=0x80431002") != std::string::npos);
         assert(message.find("verify=") == std::string::npos && message.find("errno=") == std::string::npos);
-        assert(message.find("ca=3") != std::string::npos && message.find("ca_load=0x00000000") != std::string::npos);
+        assert(message.find("ca=4") != std::string::npos && message.find("ca_load=0x00000000") != std::string::npos);
         assert(message.find("private") == std::string::npos && message.find("secret") == std::string::npos);
         assert(sslErrorReads == 1 && errnoReads == 1 && aborted);
     }

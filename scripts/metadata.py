@@ -15,6 +15,7 @@ files = {
     "assets/cacert.pem": Path("assets/cacert.pem"),
     "assets/cacert-LICENSE.txt": Path("assets/cacert-LICENSE.txt"),
     "assets/godaddy-secure-g2.pem": Path("assets/godaddy-secure-g2.pem"),
+    "assets/letsencrypt-gen-y.pem": Path("assets/letsencrypt-gen-y.pem"),
     "assets/LICENSE.txt": Path("LICENSE"),
     "assets/cJSON-LICENSE.txt": Path("third_party/cjson/LICENSE"),
     "assets/stb-LICENSE.txt": Path("third_party/stb/LICENSE"),

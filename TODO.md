@@ -1,5 +1,12 @@
 # Work tracker
 
+## r49 upstream synchronization
+
+- [x] Merge upstream main over the local r48 work using the forwarded SSH agent.
+- [x] Preserve the local package retry policy while integrating upstream TLS diagnostics and certificate loading.
+- [x] Pass the full host suite and validate the r49 PS4 package.
+- [ ] Test r49 HTTPS discovery and package installation on PS4 11.00 + GoldHEN.
+
 ## Beginner setup video
 
 - [x] Verify project setup instructions and current public release.

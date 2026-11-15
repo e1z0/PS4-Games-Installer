@@ -1,5 +1,21 @@
 # Implementation progress
 
+## r49 upstream synchronization — 2026-11-15
+
+- Fetched `origin/main` through the forwarded SSH agent and merged its eight
+  upstream commits with eight local commits. Resolved `src/http.cpp` by keeping
+  the local download timeout/retry behavior and upstream network initialization
+  and targeted TLS error query. Kept local r48 as the revision base.
+- The first host compile found a PS4-only logging call in an upstream host path;
+  fixed it. Native HTTP and startup fixtures then needed the new Let's Encrypt
+  bundle and four-root expectation. Cleaned upstream whitespace in Makefile/log.
+- `make test` passed all host/native suites, HTTP integration, and 19 Python
+  tests. `make package` built r49; `make validate` passed package hashes,
+  signatures and packed launcher imports. `revision.json` records the successful
+  r49 build. No package deployment or PS4 hardware test was performed.
+- PS4 11.00 + GoldHEN discovery, HTTPS, launching, BGFT installation and frame
+  rate still require console verification.
+
 ## Beginner setup movie — 2026-10-19
 
 - Added a consumer README video preview, linking the full reviewed MP4 and

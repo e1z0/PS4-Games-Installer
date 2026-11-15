@@ -4,6 +4,7 @@
 *.tmp
 __pycache__/
 .package.lock
+compile_commands.json
 /realease_notes.md
 
 .env
@@ -12,3 +13,8 @@ __pycache__/
 
 *.swp
 *.swo
+
+# clangd compile_commands temp dirs and config
+.cdb/
+.sdk/
+.clangd

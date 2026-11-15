@@ -1,5 +1,13 @@
 # Changelog
 
+## r49 — Upstream synchronization — 2026-11-15
+
+- Merge upstream HTTP, certificate, build-tool and installation-documentation updates
+  with the local r48 download recovery and diagnostic changes.
+- Repair host logging and native/startup certificate fixtures exposed by the merge.
+- Full host suite, 19 Python tests, PS4 package build and package validation passed.
+  Hardware HTTPS and installation behavior remain untested on PS4 11.00 + GoldHEN.
+
 ## Beginner setup video — 2026-10-19
 
 - Add a visible README video preview with companion commands and a downloadable
