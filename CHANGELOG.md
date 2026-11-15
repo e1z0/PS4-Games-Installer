@@ -1,5 +1,10 @@
 # Changelog
 
+## r50 release documentation — 2026-11-15
+
+- Draft temporary, Git-ignored release notes for features and fixes since r40.
+  Application sources and the validated r50 package remain unchanged.
+
 ## r50 — Server favorites and catalog exclusions — 2026-11-15
 
 - Show a Server favorites sidebar list when the remote catalog marks base games

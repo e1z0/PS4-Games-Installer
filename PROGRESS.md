@@ -1,5 +1,14 @@
 # Implementation progress
 
+## r50 temporary release notes — 2026-11-15
+
+- Wrote `temp_release.md` from the r42-r50 changelog with Features and
+  improvements, Bug fixes, and testing limitations. The notes are a local draft;
+  no release was published in this step.
+- Added an exact root Git ignore rule. `git check-ignore` confirms the file is
+  ignored, and the source fingerprint still matches the validated r50 revision.
+  No application build or console test was run for this documentation-only change.
+
 ## r50 server favorites and catalog exclusions — 2026-11-15
 
 - Parse server `is_favorite` flags into catalog entries and omit entries with

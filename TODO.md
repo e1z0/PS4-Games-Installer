@@ -1,5 +1,10 @@
 # Work tracker
 
+## r50 release notes draft
+
+- [x] Draft release notes covering features, improvements and fixes since r40.
+- [x] Keep `temp_release.md` outside Git and verify r50 package inputs remain unchanged.
+
 ## r50 server favorites and catalog exclusions
 
 - [x] Read `is_favorite` from server catalog entries and show a Server favorites sidebar list when populated.
