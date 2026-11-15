@@ -49,7 +49,7 @@ PS4 captures. Click a picture to open it at full size.
 
 ## Install and set up
 
-Works best with [FPKGi-node-server](https://github.com/e1z0/FPKGi-node-server),
+Works best with [PS4 Games Server](https://github.com/e1z0/PS4-Games-Server) or [FPKGi-node-server](https://github.com/e1z0/FPKGi-node-server) (legacy),
 which generates and hosts the JSON game library. Follow its setup guide, then use
 the generated library URL in the steps below.
 
