@@ -36,6 +36,8 @@ void capture(App& app, Renderer& renderer, Canvas& canvas) {
     ui.screen = Screen::Splash; shot("01-splash");
     ui.screen = Screen::Dashboard; ui.library = Library::Installed; ui.rebuild(); shot("02-installed-tiles");
     ui.library = Library::Available; ui.rebuild(); shot("03-available-tiles");
+    ui.serverFavoritesOnly = true; ui.rebuild(); ui.sidebar = true; ui.sidebarIndex = ui.activeSidebarIndex(); shot("100-server-favorites");
+    ui.sidebar = false; ui.serverFavoritesOnly = false; ui.rebuild();
     shot("16-bubbles-tiles"); shot("17-bubbles-tiles-motion");
     ui.settings.layout = Layout::Summary; ui.rebuild(); shot("04-summary");
     shot("18-bubbles-summary"); shot("19-bubbles-summary-motion");
@@ -114,7 +116,7 @@ void capture(App& app, Renderer& renderer, Canvas& canvas) {
     shot("45-package-groups");
     ui.screen = Screen::Options; ui.menuIndex = 12; shot("46-more-options");
     ui.settings.grouping = Grouping::None; ui.rebuild();
-    ui.screen = Screen::Dashboard; ui.sidebar = true; ui.sidebarIndex = 2; ui.updatesOnly = true; ui.rebuild(); shot("49-sidebar-shortcuts");
+    ui.screen = Screen::Dashboard; ui.sidebar = true; ui.updatesOnly = true; ui.rebuild(); ui.sidebarIndex = ui.activeSidebarIndex(); shot("49-sidebar-shortcuts");
     ui.sidebar = false; ui.updatesOnly = true; ui.library = Library::Available; ui.rebuild(); shot("50-newer-updates");
     ui.settings.layout = Layout::Summary; ui.rebuild(); shot("51-updates-summary");
     ui.updatesOnly = false; ui.settings.sort = SortField::Rating; ui.settings.descending = true; ui.rebuild(); shot("52-sort-ratings");

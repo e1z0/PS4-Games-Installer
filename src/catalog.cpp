@@ -28,6 +28,11 @@ std::string field(const cJSON* object, const char* key) {
     const cJSON* value = cJSON_GetObjectItem(object, key);
     return cJSON_IsString(value) ? value->valuestring : "";
 }
+bool serverFlag(const cJSON* object, const char* key) {
+    const cJSON* value = cJSON_GetObjectItemCaseSensitive(object, key);
+    // Older offline caches serialized boolean metadata as the string "true".
+    return cJSON_IsTrue(value) || (cJSON_IsString(value) && std::string(value->valuestring) == "true");
+}
 uint64_t sizeField(const cJSON* object) {
     const cJSON* value = cJSON_GetObjectItem(object, "size");
     if (cJSON_IsNumber(value)) {
@@ -91,10 +96,14 @@ std::vector<Entry> parseCatalog(const std::string& text, const std::string& cate
     std::vector<Entry> result;
     std::set<std::string> urls;
     for (const cJSON* item = data->child; item; item = item->next) {
-        if (!cJSON_IsObject(item) || !isHttpUrl(item->string))
+        if (!cJSON_IsObject(item))
+            throw std::runtime_error("Catalog DATA must map direct package URLs to objects");
+        if (serverFlag(item, "is_excluded")) continue;
+        if (!isHttpUrl(item->string))
             throw std::runtime_error("Catalog DATA must map direct package URLs to objects");
         Entry entry;
         entry.url = item->string;
+        entry.serverFavorite = serverFlag(item, "is_favorite");
         entry.name = field(item, "name");
         entry.titleId = field(item, "title_id");
         entry.region = field(item, "region");
@@ -113,7 +122,7 @@ std::vector<Entry> parseCatalog(const std::string& text, const std::string& cate
         entry.size = sizeField(item);
         entry.category = lower(category.empty() ? field(item, "category") : category);
         for (const cJSON* m = item->child; m && entry.metadata.size() < 64; m = m->next) {
-            if (std::string(m->string) == "igdb") continue;
+            if (std::string(m->string) == "igdb" || std::string(m->string) == "is_favorite" || std::string(m->string) == "is_excluded") continue;
             if (cJSON_IsString(m)) entry.metadata.emplace_back(m->string, std::string(m->valuestring).substr(0, 4096));
             else if (cJSON_IsNumber(m) || cJSON_IsBool(m)) {
                 std::unique_ptr<char, decltype(&cJSON_free)> value(printJson(m), cJSON_free);
@@ -180,6 +189,9 @@ std::string serializeCatalog(const std::vector<Entry>& entries) {
         set("version", e.version); set("min_fw", e.minFirmware); set("category", e.category);
         set("cover_url", e.coverUrl); set("release", e.release); set("content_id", e.contentId);
         set("description", e.description); set("size", std::to_string(e.size));
+        cJSON_DeleteItemFromObjectCaseSensitive(item, "is_favorite");
+        cJSON_DeleteItemFromObjectCaseSensitive(item, "is_excluded");
+        cJSON_AddBoolToObject(item, "is_favorite", e.serverFavorite);
         if (!e.packageType.empty()) set("package_type",e.packageType);
         if (!e.igdbJson.empty()) {
             auto* igdb=cJSON_Parse(e.igdbJson.c_str());

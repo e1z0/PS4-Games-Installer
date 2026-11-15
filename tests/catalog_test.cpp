@@ -43,6 +43,18 @@ int main() {
     assert(filterCatalog(entries, "", "", true) == (std::vector<size_t>{0, 1, 2}));
     mergeCatalog(entries, entries);
     assert(entries.size() == 3);
+    auto flagged = parseCatalog(R"({"DATA":{
+      "http://nas/favorite.pkg":{"name":"Favorite","is_favorite":true,"is_excluded":false},
+      "http://nas/ordinary.pkg":{"name":"Ordinary","is_favorite":false},
+      "http://nas/hidden.pkg":{"name":"Hidden","is_favorite":true,"is_excluded":true},
+      "http://nas/old-hidden.pkg":{"name":"Old hidden","is_excluded":"true"},
+      "http://nas/old-favorite.pkg":{"name":"Old favorite","is_favorite":"true"}
+    }})", "games");
+    assert(flagged.size() == 3 && flagged[0].serverFavorite && !flagged[1].serverFavorite && flagged[2].serverFavorite);
+    auto cachedFlags = parseCatalog(serializeCatalog(flagged), "");
+    assert(cachedFlags.size() == 3 && cachedFlags[0].serverFavorite && !cachedFlags[1].serverFavorite && cachedFlags[2].serverFavorite);
+    for (const auto& entry : cachedFlags) for (const auto& field : entry.metadata)
+        assert(field.first != "is_favorite" && field.first != "is_excluded");
     rejects([] { parseCatalog(R"({"DATA":[]})", "games"); });
     rejects([] { parseCatalog(R"({"DATA":{"file:///x":{"name":"x"}}})", "games"); });
     rejects([] { parseCatalog(R"({"DATA":{"http://nas/a":{"size":2}}})", "games"); });

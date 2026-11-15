@@ -45,6 +45,7 @@ class Ui {
     bool handleFeatures(Button button);
     void beginAssignment(bool tags, bool bulk = false);
     void testSetupSource();
+    bool hasServerFavorites() const;
     size_t uniqueShown = 0, installable = 0;
     std::vector<std::string> genreNames;
     bool handleBrowsing(Button button);
@@ -60,7 +61,7 @@ public:
     Screen screen = Screen::Splash, detailReturn = Screen::Dashboard, mediaReturn = Screen::Details;
     size_t selected[2] = {0, 0}, menuIndex = 0, settingsIndex = 0, sourceIndex = 0, detailScroll = 0;
     size_t ratingIndex = 0;
-    bool sidebar = false, loading = true, updatesOnly = false;
+    bool sidebar = false, loading = true, updatesOnly = false, serverFavoritesOnly = false;
     size_t sidebarIndex = 0;
     bool genresExpanded = false, detailsExpanded = false, technicalExpanded = false;
     std::string remoteGenre;

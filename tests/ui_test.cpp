@@ -202,7 +202,29 @@ void archiveAccount() {
     ui.archivePassword = "discard-on-back"; ui.handle(Button::Circle);
     assert(ui.archivePassword.empty() && ui.screen == Screen::Settings && sameSettings(ui.draft, before));
 }
+void serverFavorites() {
+    auto remote = parseCatalog(R"({"DATA":{
+      "http://nas/favorite":{"name":"Favorite","title_id":"CUSA00001","is_favorite":true},
+      "http://nas/ordinary":{"name":"Ordinary","title_id":"CUSA00002","is_favorite":false},
+      "http://nas/hidden":{"name":"Hidden","title_id":"CUSA00003","is_favorite":true,"is_excluded":true},
+      "http://nas/update":{"name":"Patch","title_id":"CUSA00001","package_type":"update","is_favorite":true}
+    }})", "games");
+    Ui ui; ui.screen = Screen::Dashboard; ui.library = Library::Available; ui.setLibraries({}, remote);
+    assert(remote.size() == 3 && ui.visible.size() == 2);
+    assert(ui.sidebarRows().size() == 4 && ui.sidebarRows()[2].name == "Server favorites");
+    ui.handle(Button::Left); ui.handle(Button::Down);
+    assert(ui.sidebarIndex == 2 && ui.serverFavoritesOnly && !ui.updatesOnly && ui.visible.size() == 1);
+    assert(ui.current()->name == "Favorite" && ui.librarySummary().find("server favorites") != std::string::npos);
+    auto saved = parseViewState(serializeViewState(ui.captureView()));
+    Ui restored; restored.screen = Screen::Dashboard; restored.setLibraries({}, remote); restored.restoreView(saved);
+    assert(restored.serverFavoritesOnly && restored.sidebarIndex == 2 && restored.visible.size() == 1);
+    ui.handle(Button::Down);
+    assert(ui.updatesOnly && !ui.serverFavoritesOnly && ui.visible.size() == 1 && ui.current()->name == "Patch");
+    restored.setLibraries({}, parseCatalog(R"({"DATA":{"http://nas/ordinary":{"name":"Ordinary"}}})", "games"));
+    assert(!restored.serverFavoritesOnly && restored.sidebarRows().size() == 3 && restored.visible.size() == 1);
+}
 int main() {
+    serverFavorites();
     archiveAccount();
     wrapNavigation();
     Command command;

@@ -93,16 +93,22 @@ bool Ui::handleDetails(Button button) {
     return true;
 }
 std::vector<std::string> Ui::genres() const { return genreNames; }
+bool Ui::hasServerFavorites() const {
+    return std::any_of(available.begin(), available.end(), [](const Entry& entry) {
+        return entry.serverFavorite && packageKind(entry) == 0;
+    });
+}
 std::vector<SidebarRow> Ui::sidebarRows() const {
     const auto choices=genres();
     std::vector<SidebarRow> rows{{"Installed","",0},{"Available"+(choices.empty() ? std::string() : genresExpanded ? " [-]" : " [+]"),"",1}};
     if(genresExpanded)for(const auto& genre:choices)rows.push_back({genre,genre,1});
+    if(hasServerFavorites()) rows.push_back({"Server favorites","",3});
     rows.push_back({"Updates","",2});
     return rows;
 }
 size_t Ui::activeSidebarIndex() const {
     const auto rows=sidebarRows();
-    for(size_t i=0;i<rows.size();++i)if(rows[i].kind==(updatesOnly ? 2 : unsigned(library))&&rows[i].genre==(library==Library::Available&&!updatesOnly ? remoteGenre : ""))return i;
+    for(size_t i=0;i<rows.size();++i)if(rows[i].kind==(serverFavoritesOnly ? 3 : updatesOnly ? 2 : unsigned(library))&&rows[i].genre==(library==Library::Available&&!updatesOnly&&!serverFavoritesOnly ? remoteGenre : ""))return i;
     return size_t(library);
 }
 }

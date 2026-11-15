@@ -14,6 +14,7 @@ std::vector<Entry> demoLibrary() {
         e.coverUrl = "http://preview.invalid/" + std::to_string(i) + ".png";
         e.region = i % 3 ? "EUR" : "USA";
         e.category = i % 5 ? "games" : "homebrew";
+        e.serverFavorite = i == 0 || i == 2 || i == 9;
         e.size = i == 0 ? 32000000000ULL : uint64_t(2 + i * 3) * 1000000000;
         e.version = "1.00"; e.release = "2026"; e.minFirmware = "11.00";
         e.description = "Desktop preview fixture. Names, IDs and sizes are sample data; no packages are downloaded.";

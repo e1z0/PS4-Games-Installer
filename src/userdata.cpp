@@ -295,8 +295,9 @@ ViewState parseViewState(const std::string& text) {
     auto root = parse(text); ViewState state;
     state.available = boolean(root.get(), "available"); state.sidebar = boolean(root.get(), "sidebar");
     state.updatesOnly = boolean(root.get(), "updates_only");
+    state.serverFavoritesOnly = boolean(root.get(), "server_favorites_only");
     state.sidebarIndex = cJSON_GetObjectItemCaseSensitive(root.get(), "sidebar_index") ? number(root.get(), "sidebar_index", 4) : (state.available ? 1 : 0);
-    if (state.sidebarIndex > 2) state.sidebarIndex = state.updatesOnly ? 2 : state.available ? 1 : 0;
+    if (state.sidebarIndex > (state.serverFavoritesOnly ? 3u : 2u)) state.sidebarIndex = state.serverFavoritesOnly ? 3 : state.updatesOnly ? 2 : state.available ? 1 : 0;
     state.query = string(root.get(), "query", 512);
     state.genre = string(root.get(), "genre", 128);
     state.genresExpanded = boolean(root.get(), "genres_expanded");
@@ -329,6 +330,7 @@ std::string serializeViewState(const ViewState& state) {
     Json root(cJSON_CreateObject(), cJSON_Delete); cJSON_AddNumberToObject(root.get(), "schema", 1);
     cJSON_AddBoolToObject(root.get(), "available", state.available); cJSON_AddBoolToObject(root.get(), "sidebar", state.sidebar);
     cJSON_AddBoolToObject(root.get(), "updates_only", state.updatesOnly);
+    cJSON_AddBoolToObject(root.get(), "server_favorites_only", state.serverFavoritesOnly);
     cJSON_AddNumberToObject(root.get(), "sidebar_index", state.sidebarIndex);
     cJSON_AddStringToObject(root.get(), "query", state.query.c_str());
     cJSON_AddStringToObject(root.get(), "genre", state.genre.c_str());

@@ -104,6 +104,8 @@ X to select characters or Done, and O to cancel.
   library are remembered when you reopen the installer.
 - **Available:** press **X** to install a game. On the sidebar, **Right** expands
   genres from your catalog; **Left** collapses them.
+- **Server favorites:** appears in the sidebar when the server marks games with
+  `is_favorite: true`. Games marked `is_excluded: true` stay out of catalog lists.
 - **Updates:** browse update and DLC packages; their matching base game is required.
 - **Triangle > Game packages:** find a title's base game, updates and DLC together.
 - **Triangle > Show screenshots:** open the gallery when the catalog supplies images.

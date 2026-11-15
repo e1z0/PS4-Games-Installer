@@ -1,5 +1,13 @@
 # Work tracker
 
+## r50 server favorites and catalog exclusions
+
+- [x] Read `is_favorite` from server catalog entries and show a Server favorites sidebar list when populated.
+- [x] Omit `is_excluded: true` server entries, including from offline catalog cache loading.
+- [x] Run host tests, inspect desktop captures, build and validate the r50 PS4 package.
+- [x] Upload r50 to the PS4 FTP target and verify its readback hash.
+- [ ] Test favorites, exclusions and refresh behavior on PS4 11.00 + GoldHEN.
+
 ## r49 upstream synchronization
 
 - [x] Merge upstream main over the local r48 work using the forwarded SSH agent.

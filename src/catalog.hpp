@@ -44,7 +44,7 @@ struct Entry {
     std::string coverUrl, localIcon, release, contentId, description;
     std::string installedVersion, latestVersion;
     uint64_t size = 0, installedSize = 0;
-    bool installed = false, queued = false;
+    bool installed = false, queued = false, serverFavorite = false;
     bool baseInstalled = false;
     // Local records are applied by Title ID after catalog parsing/refresh.
     bool wasInstalled = false;

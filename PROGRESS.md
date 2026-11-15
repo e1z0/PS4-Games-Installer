@@ -1,5 +1,24 @@
 # Implementation progress
 
+## r50 server favorites and catalog exclusions — 2026-11-15
+
+- Parse server `is_favorite` flags into catalog entries and omit entries with
+  `is_excluded: true` before merging or caching remote catalogs. The parser also
+  accepts old cache strings for these flags; newly serialized caches keep the
+  favorite flag as a JSON boolean.
+- Added a Server favorites sidebar row only when non-excluded base games are marked
+  by the server. Selecting it filters Available games, survives session restore,
+  and falls back to Available if a refreshed catalog has no favorites.
+- `make test` passed host/native suites, HTTP integration and all 19 Python
+  tests. `make screenshots` generated desktop captures; inspected the r50
+  Server favorites list and the shifted Updates sidebar selection.
+- `make package` built `PS4Game_installer-r50.pkg`; `make validate` passed package
+  hashes, signatures and packed launcher imports. `make deploy` uploaded it to
+  `ps4.efn.lt:2121/data/pkg/`; FTP readback SHA-256 matched the local package.
+- The package was uploaded for testing. Favorites, exclusions, installed-game
+  discovery, installation, launching, BGFT and frame rate have not been tested
+  on PS4 11.00 + GoldHEN in this session.
+
 ## r49 upstream synchronization — 2026-11-15
 
 - Fetched `origin/main` through the forwarded SSH agent and merged its eight

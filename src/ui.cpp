@@ -65,6 +65,7 @@ void Ui::rebuild() {
     std::map<std::string,std::string> genreMap;
     for(const auto& entry:available)if(packageKind(entry)==0)for(const auto& name:entry.igdb.genres)genreMap.emplace(lower(name),name);
     genreNames.clear(); for(const auto& genre:genreMap)genreNames.push_back(genre.second);
+    if (serverFavoritesOnly && !hasServerFavorites()) serverFavoritesOnly = false;
     matchInstalled(available, installed, queued);
     std::set<std::string> queuedTitles;
     for (const auto& e : available) if (e.queued && !e.titleId.empty()) {
@@ -97,7 +98,8 @@ void Ui::rebuild() {
         }
     }
     player.apply(installed); player.apply(available); player.apply(pending);
-    visible = makeView(entries(), settings, library, query, filter, updatesOnly && library == Library::Available, remoteGenre);
+    visible = makeView(entries(), settings, library, query, filter, updatesOnly && library == Library::Available, remoteGenre,
+                       serverFavoritesOnly && library == Library::Available);
     uniqueShown = installable = 0; std::vector<bool> seen(entries().size());
     for (const auto& item : visible) if (!seen[item.index]) {
         seen[item.index] = true; ++uniqueShown;
@@ -120,12 +122,13 @@ void Ui::setLibraries(std::optional<std::vector<Entry>> local, std::optional<std
 ViewState Ui::captureView() const {
     ViewState state; state.available = library == Library::Available; state.query = query; state.sidebar = sidebar;
     state.recentSearches = recentSearches;
-    state.filter = filter; state.updatesOnly = updatesOnly; state.sidebarIndex = updatesOnly ? 2 : size_t(library);
+    state.filter = filter; state.updatesOnly = updatesOnly; state.serverFavoritesOnly = serverFavoritesOnly;
+    state.sidebarIndex = serverFavoritesOnly ? 3 : updatesOnly ? 2 : size_t(library);
     state.genre = remoteGenre; state.genresExpanded = genresExpanded;
     for (size_t i = 0; i < 2; ++i) {
         const auto which = i ? Library::Available : Library::Installed;
         const auto& list = i ? available : installed;
-        const auto view = makeView(list, settings, which, query, filter, updatesOnly && i, remoteGenre);
+        const auto view = makeView(list, settings, which, query, filter, updatesOnly && i, remoteGenre, serverFavoritesOnly && i);
         auto& cursor = state.cursor[i]; cursor.index = selected[i];
         if (!view.empty()) {
             const auto& entry = list[view[std::min(selected[i], view.size() - 1)].index];
@@ -139,14 +142,15 @@ ViewState Ui::captureView() const {
 void Ui::restoreView(const ViewState& state) {
     library = state.available ? Library::Available : Library::Installed; query = state.query; sidebar = state.sidebar;
     recentSearches = state.recentSearches;
-    filter = state.filter; updatesOnly = state.updatesOnly; sidebarIndex = state.sidebarIndex < 3 ? state.sidebarIndex : updatesOnly ? 2 : size_t(library);
+    filter = state.filter; updatesOnly = state.updatesOnly; serverFavoritesOnly = state.serverFavoritesOnly;
+    sidebarIndex = state.sidebarIndex < 4 ? state.sidebarIndex : serverFavoritesOnly ? 3 : updatesOnly ? 2 : size_t(library);
     remoteGenre = state.genre; genresExpanded = state.genresExpanded;
     rebuild();
     if (!remoteGenre.empty() && std::find(genreNames.begin(),genreNames.end(),remoteGenre)==genreNames.end()) { remoteGenre.clear(); rebuild(); }
     sidebarIndex = activeSidebarIndex();
     for (size_t i = 0; i < 2; ++i) {
         const auto& list = i ? available : installed;
-        const auto view = makeView(list, settings, i ? Library::Available : Library::Installed, query, filter, updatesOnly && i, remoteGenre);
+        const auto view = makeView(list, settings, i ? Library::Available : Library::Installed, query, filter, updatesOnly && i, remoteGenre, serverFavoritesOnly && i);
         const auto& cursor = state.cursor[i];
         selected[i] = view.empty() ? 0 : std::min(cursor.index, view.size() - 1);
         std::optional<size_t> fallback;
@@ -166,6 +170,7 @@ std::string Ui::librarySummary() const {
         return std::to_string(installed.size()) + " installed games" +
             (uniqueShown != installed.size() ? " / " + std::to_string(uniqueShown) + " shown" : "");
     if (updatesOnly) return std::to_string(uniqueShown) + " updates / DLC";
+    if (serverFavoritesOnly) return std::to_string(uniqueShown) + " server favorites / " + std::to_string(installable) + " available to install";
     return std::to_string(installable) + " available to install / " + std::to_string(uniqueShown) + (remoteGenre.empty() ? " games" : " games in " + remoteGenre);
 }
 void Ui::beginEdit(EditKind kind, size_t index, const std::string& text) {
@@ -602,7 +607,7 @@ void Ui::handle(Button b) {
     }
     if (b == Button::Options) { menuIndex = 0; screen = Screen::Options; return; }
     if (b == Button::L1 || b == Button::R1) {
-        library = library == Library::Installed ? Library::Available : Library::Installed; updatesOnly = false; remoteGenre.clear(); sidebarIndex = int(library); rebuild(); return;
+        library = library == Library::Installed ? Library::Available : Library::Installed; updatesOnly = false; serverFavoritesOnly = false; remoteGenre.clear(); sidebarIndex = int(library); rebuild(); return;
     }
     if (sidebar) {
         if (b == Button::Left && (sidebarIndex == 1 || !remoteGenre.empty())) {
@@ -617,7 +622,8 @@ void Ui::handle(Button b) {
         }
         const auto rows=sidebarRows(); sidebarIndex=std::min(sidebarIndex,rows.size()-1);
         const auto row=rows[sidebarIndex];
-        library = row.kind ? Library::Available : Library::Installed; updatesOnly = row.kind == 2; remoteGenre = row.genre;
+        library = row.kind ? Library::Available : Library::Installed; updatesOnly = row.kind == 2;
+        serverFavoritesOnly = row.kind == 3; remoteGenre = row.genre;
         selected[int(library)]=0; rebuild(); return;
     }
     if (auto* e = current()) {

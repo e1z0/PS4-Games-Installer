@@ -203,15 +203,15 @@ void Renderer::draw(Canvas& c, Ui& ui, ArtworkCache& artwork, double time) {
     c.text("OPTIONS", 78, 840, 18, Muted);
     c.text("Settings & more", 78, 875, 23, White, 236);
     c.text("Vintage2000.org", 78, 935, 18, Muted);
-    c.text(ui.library == Library::Installed ? "Installed games" : ui.updatesOnly ? "Updates / DLC" : "Available games", 368, 206, 32, White);
+    c.text(ui.library == Library::Installed ? "Installed games" : ui.updatesOnly ? "Updates / DLC" : ui.serverFavoritesOnly ? "Server favorites" : "Available games", 368, 206, 32, White);
     c.text(ui.filterDescription(), 750, 205, 20, Accent, 850);
     c.text(std::to_string(ui.shownGames()) + (ui.shownGames() == 1 ? " title" : " titles"), 1640, 204, 23, Muted, 220);
     if (ui.bulkMode) c.text("SELECTING: " + std::to_string(ui.markedTitles.size()) + " games", 75, 665, 21, Accent, 250);
 
     if (ui.visible.empty()) {
         c.image(*placeholder, 1020, 365, 140, 140, 180);
-        c.text(!ui.filterDescription().empty() || !ui.query.empty() ? "No games match this view" : ui.library == Library::Installed ? "No installed games found" : ui.updatesOnly ? "No updates or DLC found" : "Your remote library belongs here", 700, 585, 34, White, 1100);
-        c.text(!ui.filterDescription().empty() ? "Options > Browse local categories or tags > All games clears local filters." : !ui.query.empty() ? "Options > Search lets you change or clear your search." : ui.library == Library::Installed ? "Refresh the library in Options, or browse Available." : ui.updatesOnly ? "Refresh the catalog to load updates and DLC. Install the matching base game first." : "Open Options > Settings and enter your Games JSON URL.", 610, 641, 26, Muted, 1220);
+        c.text(!ui.filterDescription().empty() || !ui.query.empty() ? "No games match this view" : ui.library == Library::Installed ? "No installed games found" : ui.updatesOnly ? "No updates or DLC found" : ui.serverFavoritesOnly ? "No server favorites match this view" : "Your remote library belongs here", 700, 585, 34, White, 1100);
+        c.text(!ui.filterDescription().empty() ? "Options > Browse local categories or tags > All games clears local filters." : !ui.query.empty() ? "Options > Search lets you change or clear your search." : ui.library == Library::Installed ? "Refresh the library in Options, or browse Available." : ui.updatesOnly ? "Refresh the catalog to load updates and DLC. Install the matching base game first." : ui.serverFavoritesOnly ? "Check Available or refresh the server catalog for new favorites." : "Open Options > Settings and enter your Games JSON URL.", 610, 641, 26, Muted, 1220);
         if (ui.loading) c.text("Loading...", 1020, 702, 25, Accent);
     } else if (ui.settings.layout == Layout::Tiles) {
         const auto& rows = ui.tileRows();

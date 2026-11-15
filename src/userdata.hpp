@@ -40,7 +40,7 @@ struct PlayerData {
 };
 struct LibraryCursor { std::string titleId, url; size_t index = 0; std::string group; };
 struct ViewState {
-    bool available = false, sidebar = false, updatesOnly = false;
+    bool available = false, sidebar = false, updatesOnly = false, serverFavoritesOnly = false;
     size_t sidebarIndex = 0;
     std::string query, genre;
     bool genresExpanded = false;

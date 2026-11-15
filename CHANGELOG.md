@@ -1,5 +1,16 @@
 # Changelog
 
+## r50 — Server favorites and catalog exclusions — 2026-11-15
+
+- Show a Server favorites sidebar list when the remote catalog marks base games
+  with `is_favorite: true`; preserve the selected view across restarts.
+- Omit server packages marked `is_excluded: true` from catalog lists and caches.
+  Older caches that stored these flags as strings remain readable.
+- Full host suite and 19 Python tests passed. Desktop favorites and Updates
+  captures were inspected. The PS4 package built and validated, then uploaded
+  to the configured FTP target with a matching SHA-256 readback.
+- Console behavior still needs testing on PS4 11.00 + GoldHEN.
+
 ## r49 — Upstream synchronization — 2026-11-15
 
 - Merge upstream HTTP, certificate, build-tool and installation-documentation updates

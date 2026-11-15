@@ -125,7 +125,7 @@ bool matchesLocal(const Entry& entry, const LocalFilter& filter) {
     return true;
 }
 std::vector<VisibleEntry> makeView(const std::vector<Entry>& entries, const Settings& s,
-                                 Library library, const std::string& query, const LocalFilter& filter, bool updatesOnly, const std::string& genre) {
+                                 Library library, const std::string& query, const LocalFilter& filter, bool updatesOnly, const std::string& genre, bool serverFavoritesOnly) {
     std::vector<VisibleEntry> out;
     auto q = lower(query);
     std::map<std::string, std::string> titleNames;
@@ -135,6 +135,7 @@ std::vector<VisibleEntry> makeView(const std::vector<Entry>& entries, const Sett
         if (library == Library::Available) {
             const bool addon = packageKind(e) == 1 || packageKind(e) == 2;
             if (addon != updatesOnly) continue;
+            if (serverFavoritesOnly && !e.serverFavorite) continue;
             if (!updatesOnly && !genre.empty() && std::none_of(e.igdb.genres.begin(),e.igdb.genres.end(),[&](const std::string& name){ return lower(name)==lower(genre); })) continue;
         }
         if (!matchesLocal(e, filter)) continue;
